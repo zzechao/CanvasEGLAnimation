@@ -41,20 +41,26 @@ open class DefaultLog : ILog {
     }
 
     override fun w(tag: String, message: () -> Any?) {
+        Log.w(tag, message()?.toString() ?: "")
     }
 
     override fun w(tag: String, format: String, vararg args: Any?) {
+        Log.w(tag, String.format(format, *args))
     }
 
     override fun w(tag: String, message: String) {
+        Log.w(tag, message)
     }
 
     override fun e(tag: String, message: () -> Any?, error: Throwable?) {
+        Log.e(tag, message()?.toString() ?: "", error)
     }
 
     override fun e(tag: String, format: String, error: Throwable?, vararg args: Any?) {
+        Log.e(tag, String.format(format, *args), error)
     }
 
     override fun e(tag: String, message: String, error: Throwable?) {
+        Log.e(tag, message, error)
     }
 }

@@ -65,7 +65,19 @@ open class AnimPlayer(
 
     override fun pause() {
         isResume.getAndSet(false)
-        canvasHandler.removeCallback()
+        if (isMainHandler) {
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                canvasHandler.removeCallback()
+            } else {
+                ChoreographerKT.mainHandler.post { canvasHandler.removeCallback() }
+            }
+        } else {
+            if (Looper.myLooper() == ChoreographerKT.animViewHandler.looper) {
+                canvasHandler.removeCallback()
+            } else {
+                ChoreographerKT.animViewHandler.post { canvasHandler.removeCallback() }
+            }
+        }
     }
 
     override fun endAnimation() {
@@ -77,7 +89,7 @@ open class AnimPlayer(
     }
 
     override fun removeAnimId(animId: Long) {
-        pathObjectDeal.removeAnimId(animId)
+        pathObjectDeal.removeAnimId(animId, isCancel = true)
     }
 
 

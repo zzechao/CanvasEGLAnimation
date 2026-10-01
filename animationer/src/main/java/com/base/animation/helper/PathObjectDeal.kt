@@ -24,6 +24,7 @@ import kotlinx.coroutines.supervisorScope
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.TimeUnit
 
 /**
@@ -54,7 +55,7 @@ class PathObjectDeal(parserEnd: () -> Unit) : IPathObjectDeal {
     /**
      * 动画事件
      */
-    override val animListeners = mutableSetOf<IAnimListener>()
+    override val animListeners: MutableSet<IAnimListener> = CopyOnWriteArraySet()
 
     /**
      * 路径缓存
@@ -109,7 +110,7 @@ class PathObjectDeal(parserEnd: () -> Unit) : IPathObjectDeal {
 
                                     for (i in 0..times.toInt()) {
                                         startPosition++
-                                        val p = i * fpsTime / duringTime
+                                        val p = if (duringTime <= 0L) 1f else (i * fpsTime * 1f / duringTime).coerceIn(0f, 1f)
                                         if (displayItem?.isCalculate == true) {
                                             pathProcess.curTotalTime += fpsTime
                                             val animDrawObject = AnimDrawObject(start.displayItemId)
@@ -186,10 +187,10 @@ class PathObjectDeal(parserEnd: () -> Unit) : IPathObjectDeal {
     /**
      * 清空执行中ids
      */
-    override fun removeAnimId(animId: Long) {
-        Log.d(TAG, "removeAnimId:$animId")
+    override fun removeAnimId(animId: Long, isCancel: Boolean) {
+        Log.d(TAG, "removeAnimId:$animId isCancel:$isCancel")
         animDrawIds.remove(animId)
-        if (animListeners.isNotEmpty()) {
+        if (isCancel && animListeners.isNotEmpty()) {
             val map = animDrawObjects.toMap()
             animListeners.forEach {
                 val animObject = map[animId]

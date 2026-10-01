@@ -118,6 +118,7 @@ object AnimDecoder2 {
                     dealDisplayItem.invoke(animNode, bitmapDisplayItem) // 代理出去处理图片的加载方式
                     val bitmapWidth = bitmapDisplayItem.mBitmap?.width ?: return@suspendAdd null
                     val bitmapHeight = bitmapDisplayItem.mBitmap?.height ?: return@suspendAdd null
+                    if (bitmapHeight <= 0) return@suspendAdd null
                     val displayWidth = animNode.displayHeightSize * bitmapWidth / bitmapHeight
                     bitmapDisplayItem.setDisplaySize(displayWidth, animNode.displayHeightSize)
                     bitmapDisplayItem
@@ -170,9 +171,8 @@ object AnimDecoder2 {
                         )
                     } ?: 0
                     if (layoutId > 0) {
-                        val activity =
-                            chain.anim.getView()?.getFragmentActivity() ?: return@suspendAdd null
-                        val layoutDisplayItem = LayoutDisplayItem(activity, layoutId)
+                        val viewContext = chain.anim.getView()?.context ?: AnimationEx.mApplication ?: return@suspendAdd null
+                        val layoutDisplayItem = LayoutDisplayItem(viewContext, layoutId)
                         dealDisplayItem.invoke(
                             animNode, layoutDisplayItem
                         )

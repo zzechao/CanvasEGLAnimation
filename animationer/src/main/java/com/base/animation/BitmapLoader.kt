@@ -19,8 +19,8 @@ object BitmapLoader {
         reqHeight: Int
     ): Bitmap =
         BitmapFactory.Options().run {
-            // 如果期望的宽高是合法的, 则开启检测尺寸模式
-            inPreferredConfig = Bitmap.Config.RGB_565
+            // 保证Alpha透明通道正常保留，防止透明背景变黑
+            inPreferredConfig = Bitmap.Config.ARGB_8888
 
             var mSampleSize = sampleSize
             if (mSampleSize == 1) {

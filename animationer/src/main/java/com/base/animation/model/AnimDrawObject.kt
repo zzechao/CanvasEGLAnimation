@@ -30,7 +30,7 @@ class DrawObject(val animId: Long, override val extra: String) : BaseAnimDrawObj
      * 处理路径
      */
     private fun pathDrawable(pathObjectDeal: IPathObjectDeal, framePositionCount: Int, displayItemDraw: BaseDisplayItem.(AnimDrawObject) -> Unit) {
-        if (currencyPosition == 0) {
+        if (currencyPosition == 0 && status == Status.INIT) {
             status = Status.START
             pathObjectDeal.animListeners.forEach {
                 it.onStartAnim(animId, extra)
@@ -40,13 +40,13 @@ class DrawObject(val animId: Long, override val extra: String) : BaseAnimDrawObj
             pathObjectDeal.animListeners.forEach {
                 it.onRunningAnim(animId, extra)
             }
-        } else if (currencyPosition >= animDraws.size - 1) {
+        } else if (status != Status.STOP && currencyPosition >= animDraws.size - 1) {
             currencyPosition = animDraws.size - 1
             status = Status.STOP
             pathObjectDeal.animListeners.forEach {
                 it.onEndAnim(animId, extra)
             }
-            pathObjectDeal.removeAnimId(animId)
+            pathObjectDeal.removeAnimId(animId, isCancel = false)
         }
 
         animDraws[currencyPosition]?.forEach { drawObject ->
@@ -58,9 +58,6 @@ class DrawObject(val animId: Long, override val extra: String) : BaseAnimDrawObj
         }
 
         currencyPosition += framePositionCount
-        if (status == Status.STOP) {
-            pathObjectDeal.removeAnimId(animId)
-        }
     }
 
     override fun draw(canvas: Canvas, pathObjectDeal: IPathObjectDeal, framePositionCount: Int, frameTime: Long) {
@@ -77,7 +74,7 @@ class DrawObject(val animId: Long, override val extra: String) : BaseAnimDrawObj
 
     override fun touch(pathObjectDeal: IPathObjectDeal, touchPoint: DoubleLinkedReference<PointF>?) {
         if (status == Status.START || status == Status.DRAWING) {
-            val touchPosition = currencyPosition - 1
+            val touchPosition = (currencyPosition - 1).coerceAtLeast(0)
             animDraws[touchPosition]?.forEach { drawObject ->
                 if (drawObject.displayItemId != curDisplayItemId || displayItem == null) {
                     curDisplayItemId = drawObject.displayItemId

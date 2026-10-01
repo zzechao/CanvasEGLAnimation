@@ -55,8 +55,6 @@ open class AnimSurfaceView @JvmOverloads constructor(
         super.onDetachedFromWindow()
         player.setCanvasFrameCallback(null)
         endAnimation()
-        holder.removeCallback(this)
-        holder.surface.release()
         animScope?.cancel()
     }
 
@@ -107,7 +105,7 @@ open class AnimSurfaceView @JvmOverloads constructor(
     }
 
     override fun doCanvasFrame(frameTime: Long): Boolean {
-        if (isSurfaceRelease) return true
+        if (isSurfaceRelease || !holder.surface.isValid) return true
         val framePositionCount = if (frameTime == 0L) {
             1
         } else {
@@ -119,7 +117,7 @@ open class AnimSurfaceView @JvmOverloads constructor(
             }
         }
         animScope?.launch {
-            if (isSurfaceRelease) return@launch
+            if (isSurfaceRelease || !holder.surface.isValid) return@launch
             var canvas: Canvas? = null
             try {
                 canvas = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

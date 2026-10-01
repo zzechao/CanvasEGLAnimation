@@ -122,6 +122,9 @@ interface IAnimNode : XmlBaseAnimNode, IXmlObjNodeParser {
     }
 
     fun getLayoutIdPoint(idLayout: Int, init: () -> Point): Point {
+        if (idLayout == View.NO_ID) {
+            return init.invoke()
+        }
         return pointLayoutIDCache[idLayout] ?: init.invoke().apply {
             pointLayoutIDCache[idLayout] = this
         }

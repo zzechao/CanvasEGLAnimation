@@ -52,7 +52,24 @@ class EGLAnimPlayer(private val render: EGLRender = EGLRender()) : AnimPlayer(fa
     }
 
     override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
-        return render.onSurfaceTextureDestroyed(surface)
+        setCanvasFrameCallback(null)
+        val result = safeOffer(EGLAction(EGLAction.MSG_DESTROY) {
+            release()
+            try {
+                surface.release()
+            } catch (e: Throwable) {
+                Animer.log.e(TAG, "surface release error: ${e.message}")
+            }
+        })
+        if (result.isFailure || glActor?.isClosedForSend == true) {
+            release()
+            try {
+                surface.release()
+            } catch (e: Throwable) {
+                Animer.log.e(TAG, "surface release error: ${e.message}")
+            }
+        }
+        return false
     }
 
     private var nanoTime = 0L

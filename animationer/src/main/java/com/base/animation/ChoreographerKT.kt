@@ -13,23 +13,26 @@ import android.view.Choreographer
  */
 object ChoreographerKT {
     internal val mainHandler = Handler(Looper.getMainLooper())
-    private val mainChoreographer by lazy { Choreographer.getInstance() }
+    private var mainChoreographer: Choreographer? = null
 
     internal val animViewHandler: Handler by lazy {
         val handlerThread = HandlerThread("AnimPlayer_Handler")
         handlerThread.start()
         Handler(handlerThread.looper)
     }
-    private val surfaceViewChoreographer by lazy { Choreographer.getInstance() }
 
     /**
      * 根据不同looper 构造
      */
     fun getChoreographer(): Choreographer? {
-        return if (Looper.myLooper() == Looper.getMainLooper()) {
+        val looper = Looper.myLooper() ?: return null
+        return if (looper == Looper.getMainLooper()) {
+            if (mainChoreographer == null) {
+                mainChoreographer = Choreographer.getInstance()
+            }
             mainChoreographer
-        } else if (Looper.myLooper() == animViewHandler.looper) {
-            surfaceViewChoreographer
+        } else if (looper == animViewHandler.looper) {
+            Choreographer.getInstance()
         } else {
             null
         }

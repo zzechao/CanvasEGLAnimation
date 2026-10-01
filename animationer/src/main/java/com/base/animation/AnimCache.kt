@@ -18,4 +18,9 @@ object AnimCache {
      * 坐标记录
      */
     val pointLayoutIDCache = ConcurrentHashMap<Int, Point>()
+
+    fun clear() {
+        displayItemCache.clear()
+        pointLayoutIDCache.clear()
+    }
 }

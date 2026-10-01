@@ -59,7 +59,7 @@ class PathObject(
     }
 
     fun key(): String {
-        return "x:${point.x}_y:${point.y}_${alpha}_${scaleX}_${scaleY}_${rotation}_${interpolator::javaClass.name}_${displayItemId}"
+        return "x:${point.x}_y:${point.y}_${alpha}_${scaleX}_${scaleY}_${rotation}_${interpolator.javaClass.name}_${displayItemId}"
     }
 
     fun copy(): PathObject {

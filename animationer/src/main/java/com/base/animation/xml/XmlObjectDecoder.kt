@@ -112,7 +112,9 @@ open class XmlObjectDecoder {
     }
 
     internal fun XmlPullParser.skipDocumentStart() {
-        if (depth == 0) next()
+        while (eventType != XmlPullParser.START_TAG && eventType != XmlPullParser.END_DOCUMENT) {
+            next()
+        }
     }
 
     protected open fun onSetAttribute(objnode: IAnimNode, name: String, value: String) {

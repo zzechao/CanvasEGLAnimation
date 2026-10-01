@@ -52,7 +52,7 @@ class DrawObject2(val animId: Long, override val extra: String) : BaseAnimDrawOb
                 if (isCalculate) { // 是否计算任务回调上层触发
                     calculate(drawObject, drawObject.current, drawObject.interpolator)
                 } else {
-                    val p = drawObject.curTotalTime / drawObject.durTime
+                    val p = if (drawObject.durTime <= 0f) 1f else (drawObject.curTotalTime / drawObject.durTime).coerceIn(0f, 1f)
                     val interP = drawObject.interpolator.getInterpolation(p)
                     val inPoint = PointF(
                         drawObject.start.point.x + drawObject.item.totalX * interP,
@@ -78,7 +78,7 @@ class DrawObject2(val animId: Long, override val extra: String) : BaseAnimDrawOb
             pathObjectDeal.animListeners.forEach {
                 it.onEndAnim(animId, extra)
             }
-            pathObjectDeal.removeAnimId(animId)
+            pathObjectDeal.removeAnimId(animId, isCancel = false)
         }
     }
 

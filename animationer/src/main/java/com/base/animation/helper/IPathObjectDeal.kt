@@ -30,5 +30,5 @@ interface IPathObjectDeal {
 
     fun hasTask(): Boolean
 
-    fun removeAnimId(animId: Long)
+    fun removeAnimId(animId: Long, isCancel: Boolean = false)
 }

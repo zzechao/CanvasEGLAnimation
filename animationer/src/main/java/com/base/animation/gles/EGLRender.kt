@@ -75,6 +75,10 @@ class EGLRender : IRenderer {
     private val mMVPMatrix by lazy { FloatArray(16) }
     private val projection by lazy { FloatArray(16) }
     private val viewMatrix by lazy { FloatArray(16) }
+    private val mTexMatrix by lazy { FloatArray(16) }
+    private val mIdentityMatrix by lazy {
+        FloatArray(16).apply { Matrix.setIdentityM(this, 0) }
+    }
 
     private val texturePools by lazy { EGLTexturePools() }
 
@@ -152,11 +156,16 @@ class EGLRender : IRenderer {
         GLES20.glUniform1i(shader.uIsColor2DHandle, if (animTexture.type == EGLAnimTexture.TextureType.BITMAP) 1 else 0)
         GLES20.glUniform1f(shader.uAlphaHandle, alpha / 255f)
 
-        Matrix.setIdentityM(mMVPMatrix, 0)
+        // 外部纹理变换矩阵支持与传递
         if (animTexture.type == EGLAnimTexture.TextureType.STRING || animTexture.type == EGLAnimTexture.TextureType.LAYOUT) {
             animTexture.surfaceTexture?.updateTexImage()
-            animTexture.surfaceTexture?.getTransformMatrix(mMVPMatrix)
+            animTexture.surfaceTexture?.getTransformMatrix(mTexMatrix)
+            GLES20.glUniformMatrix4fv(shader.uTexMatrixHandle, 1, false, mTexMatrix, 0)
+        } else {
+            GLES20.glUniformMatrix4fv(shader.uTexMatrixHandle, 1, false, mIdentityMatrix, 0)
         }
+
+        Matrix.setIdentityM(mMVPMatrix, 0)
         Matrix.orthoM(projection, 0, -1f, 1f * mDisplayScaleX, -1f * mDisplayScaleY, 1f, 1f, -1f)
         Matrix.setLookAtM(viewMatrix, 0, 0f, 0f, 1f, 0f, 0f, 0f, 0f, 1f, 0f)
         Matrix.multiplyMM(mMVPMatrix, 0, projection, 0, viewMatrix, 0)
@@ -177,15 +186,12 @@ class EGLRender : IRenderer {
             // 绑定外部纹理到纹理单元1
             GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
             GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, animTexture.textureId)
-            GLES20.glUniform1i(shader.vTextureOESHandle, 1); // 对应GL_TEXTURE1
+            GLES20.glUniform1i(shader.vTextureOESHandle, 1) // 对应GL_TEXTURE1
         }
 
+        // 预乘Alpha标准混合模式，彻底消除半透明暗晕黑边
         GLES20.glEnable(GLES20.GL_BLEND)
-        if (alpha < 255) {
-            GLES20.glBlendFuncSeparate(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA, GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA)
-        } else {
-            GLES20.glBlendFuncSeparate(GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA, GLES20.GL_ONE, GLES20.GL_ONE)
-        }
+        GLES20.glBlendFunc(GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA)
 
         // 绘制
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
@@ -200,6 +206,7 @@ class EGLRender : IRenderer {
      */
     @WorkerThread
     fun drawRenderBegin() {
+        texturePools.pollAndReleaseEvictedTextures()
         GLES20.glClearColor(0.0f, 0.0f, 0.0f, 0.0f)
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
         shader.useShader()
@@ -208,7 +215,7 @@ class EGLRender : IRenderer {
         GLES20.glUniform1i(shader.texHandle, 0)
 
         GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
-        GLES20.glUniform1i(shader.vTextureOESHandle, 1);
+        GLES20.glUniform1i(shader.vTextureOESHandle, 1)
     }
 
     /**
@@ -222,11 +229,6 @@ class EGLRender : IRenderer {
 
     @WorkerThread
     fun release() {
-        texturePools.textureCacheMap().map {
-            GLES20.glDeleteTextures(1, intArrayOf(it.value.textureId), 0)
-            it.value.surface?.release()
-            it.value.surfaceTexture?.release()
-        }
         texturePools.clear()
         GLES20.glDisable(GLES20.GL_BLEND)
         shader.destroyShader()

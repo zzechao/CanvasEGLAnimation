@@ -68,8 +68,9 @@ class StringDisplayItem(
     }
 
     override fun drawDisplayItem(animId: Long, render: EGLRender, x: Float, y: Float, alpha: Int, scaleX: Float, scaleY: Float, rotation: Float) {
-        val maxSize = max(displayWidth, displayHeight)
-        render.drawItem(animId, txtStaticLayout.hashCode(), maxSize, maxSize, x, y, alpha, scaleX, scaleY, rotation, ::getTextureIfPresent)
+        val maxSize = max(displayWidth, displayHeight).coerceAtLeast(1)
+        val cacheKey = if (displayItemId.isNotEmpty()) displayItemId.hashCode() else this.hashCode()
+        render.drawItem(animId, cacheKey, maxSize, maxSize, x, y, alpha, scaleX, scaleY, rotation, ::getTextureIfPresent)
     }
 
     private fun getTextureIfPresent(): EGLAnimTexture {
@@ -84,7 +85,7 @@ class StringDisplayItem(
         val textureId = externalTextureId[0]
         val eglAnimTexture = EGLAnimTexture(textureId, EGLAnimTexture.TextureType.STRING)
         val surfaceTexture = SurfaceTexture(textureId)
-        val maxSize = max(displayWidth, displayHeight)
+        val maxSize = max(displayWidth, displayHeight).coerceAtLeast(1)
         surfaceTexture.setDefaultBufferSize(maxSize, maxSize)
         eglAnimTexture.surfaceTexture = surfaceTexture
         eglAnimTexture.surface = Surface(surfaceTexture)
@@ -116,5 +117,17 @@ class StringDisplayItem(
     }
 
     override fun touch(animId: Long, onAnimItemClick: OnAnimItemClick, animDrawObject: AnimDrawObject, touchPoint: DoubleLinkedReference<PointF>, extra: String) {
+        val scaledWidth = displayWidth * animDrawObject.scaleX
+        val scaledHeight = displayHeight * animDrawObject.scaleY
+        val left = animDrawObject.point.x - scaledWidth / 2
+        val right = animDrawObject.point.x + scaledWidth / 2
+        val top = animDrawObject.point.y - scaledHeight / 2
+        val bottom = animDrawObject.point.y + scaledHeight / 2
+        touchPoint.data?.let {
+            if (it.x in left..right && it.y in top..bottom) {
+                onAnimItemClick.itemClick(animId, animDrawObject, it, animDrawObject.point, extra)
+                touchPoint.reset()
+            }
+        }
     }
 }

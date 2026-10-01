@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CopyOnWriteArraySet
 
 /**
  * @author:zhouzechao
@@ -41,7 +42,7 @@ class PathObjectDeal2(parserEnd: () -> Unit) : IPathObjectDeal {
     /**
      * 动画事件
      */
-    override val animListeners = mutableSetOf<IAnimListener>()
+    override val animListeners: MutableSet<IAnimListener> = CopyOnWriteArraySet()
 
     /**
      * 计算路径上的各个坐标点
@@ -120,9 +121,9 @@ class PathObjectDeal2(parserEnd: () -> Unit) : IPathObjectDeal {
     /**
      * 清空执行中ids
      */
-    override fun removeAnimId(animId: Long) {
+    override fun removeAnimId(animId: Long, isCancel: Boolean) {
         animDrawIds.remove(animId)
-        if (animListeners.isNotEmpty()) {
+        if (isCancel && animListeners.isNotEmpty()) {
             val map = animDrawObjects.toMap()
             animListeners.forEach {
                 val animObject = map[animId]
