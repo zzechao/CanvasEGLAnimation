@@ -54,15 +54,14 @@ class DrawObject2(val animId: Long, override val extra: String) : BaseAnimDrawOb
                 } else {
                     val p = if (drawObject.durTime <= 0f) 1f else (drawObject.curTotalTime / drawObject.durTime).coerceIn(0f, 1f)
                     val interP = drawObject.interpolator.getInterpolation(p)
-                    val inPoint = PointF(
-                        drawObject.start.point.x + drawObject.item.totalX * interP,
-                        drawObject.start.point.y + drawObject.item.totalY * interP
-                    )
+                    val newX = drawObject.start.point.x + drawObject.item.totalX * interP
+                    val newY = drawObject.start.point.y + drawObject.item.totalY * interP
+                    drawObject.current.point.set(newX, newY)
                     val alpha = drawObject.start.alpha + (drawObject.item.totalAlpha * interP).toInt()
                     val scaleX = drawObject.start.scaleX + drawObject.item.totalScaleX * interP
                     val scaleY = drawObject.start.scaleY + drawObject.item.totalScaleY * interP
                     val rotation = drawObject.start.rotation + drawObject.item.totalRotation * interP
-                    drawObject.current.reset(inPoint, alpha, scaleX, scaleY, rotation)
+                    drawObject.current.reset(drawObject.current.point, alpha, scaleX, scaleY, rotation)
                 }
                 displayItemDraw.invoke(this, drawObject.current)
             }

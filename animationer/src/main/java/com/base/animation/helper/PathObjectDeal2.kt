@@ -1,5 +1,6 @@
 package com.base.animation.helper
 
+import android.graphics.PointF
 import com.base.animation.AnimCache
 import com.base.animation.Animer
 import com.base.animation.IAnimListener
@@ -77,9 +78,10 @@ class PathObjectDeal2(parserEnd: () -> Unit) : IPathObjectDeal {
                                     val totalScaleY = endAnimObject.scaleY - startAnimObject.scaleY
                                     val totalRotation = endAnimObject.rotation - startAnimObject.rotation
                                     val pathProcessItem = PathProcessItem(totalX, totalY, totalAlpha, totalScaleX, totalScaleY, totalRotation)
+                                    val currentAnimObject = startAnimObject.copy(point = PointF(startAnimObject.point.x, startAnimObject.point.y))
                                     PathProcess(
                                         startAnimObject, endAnimObject, start.interpolator, duringTime, 0f,
-                                        pathProcessItem, startAnimObject.copy(), clickable, expand
+                                        pathProcessItem, currentAnimObject, clickable, expand
                                     )
                                 }
                             }
