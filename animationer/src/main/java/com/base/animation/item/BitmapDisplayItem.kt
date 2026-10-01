@@ -54,7 +54,7 @@ open class BitmapDisplayItem : BaseDisplayItem() {
     override fun drawDisplayItem(animId: Long, render: EGLRender, x: Float, y: Float, alpha: Int, scaleX: Float, scaleY: Float, rotation: Float) {
         val bitmap = mBitmap ?: return
         if (bitmap.isRecycled) return
-        val cacheKey = if (displayItemId.isNotEmpty()) displayItemId.hashCode() else bitmap.hashCode()
+        val cacheKey = bitmap.hashCode()
         render.drawItem(animId, cacheKey, displayWidth, displayHeight, x, y, alpha, scaleX, scaleY, rotation, ::getTextureIfPresent)
     }
 
