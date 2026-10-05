@@ -47,7 +47,7 @@ dependencies {
 
 
 project.version = "1.1.1"
-apply from: "${rootProject.projectDir}/publish-mavencentral.gradle"
+apply from: "${rootProject.projectDir}/publish-maven-zip.gradle"
 
 
 //uploadArchives {
