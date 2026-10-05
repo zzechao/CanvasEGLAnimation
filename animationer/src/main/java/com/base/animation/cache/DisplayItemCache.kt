@@ -1,14 +1,13 @@
 package com.base.animation.cache
 
+import android.util.LruCache
 import com.base.animation.Animer
 import com.base.animation.item.BaseDisplayItem
-import com.google.common.cache.CacheBuilder
-import java.util.concurrent.TimeUnit
 
 /**
  * @author:zhouzechao
  * @date: 1/22/21
- * description：DisplayItem缓存，策略是10秒没用的自动释放掉
+ * description：DisplayItem缓存
  */
 
 private const val TAG = "DisplayItemCache"
@@ -17,19 +16,13 @@ class DisplayItemCache {
 
     var displayMaxCacheSize: Long = 200L
 
-    private val caches: com.google.common.cache.Cache<String, BaseDisplayItem> by lazy {
-        CacheBuilder.newBuilder()
-            .concurrencyLevel(4)
-            .maximumSize(displayMaxCacheSize)
-            .initialCapacity(10)
-            .expireAfterAccess(60, TimeUnit.SECONDS)
-            .build()
+    private val caches: LruCache<String, BaseDisplayItem> by lazy {
+        LruCache(displayMaxCacheSize.toInt())
     }
-
 
     fun putDisplayItems(displayItems: MutableMap<String, out BaseDisplayItem>) {
         Animer.log.i(TAG, "putDisplayItems displayItems:${displayItems.size}")
-        displayItems.map {
+        displayItems.forEach {
             caches.put(it.key, it.value)
         }
     }
@@ -38,20 +31,20 @@ class DisplayItemCache {
      * 获取
      */
     fun getDisplayItem(displayItemId: String): BaseDisplayItem? {
-        return caches.getIfPresent(displayItemId)
+        return caches.get(displayItemId)
     }
 
     /**
      * 是否含有对应的key和clazz
      */
     fun hasDisplayItem(key: String): Boolean {
-        return caches.getIfPresent(key) != null
+        return caches.get(key) != null
     }
 
     /**
      * 清空一级和二级缓存
      */
     fun clear() {
-        caches.invalidateAll()
+        caches.evictAll()
     }
 }

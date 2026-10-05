@@ -2,6 +2,7 @@ package com.base.animation.common
 
 import android.graphics.Canvas
 import android.graphics.PointF
+import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
 import android.view.View
@@ -50,33 +51,31 @@ open class AnimPlayer(
         this.callback = callback
     }
 
+    protected open fun getAnimHandler(): Handler {
+        return if (isMainHandler) ChoreographerKT.mainHandler else ChoreographerKT.animViewHandler
+    }
+
     private fun onResume() {
         Animer.log.i(TAG, "onResume isSurfaceView:$isMainHandler $callback")
         val callback = callback ?: return
         if (isResume.compareAndSet(false, true)) {
             Animer.log.i(TAG, "onResume isSurfaceView:$isMainHandler $callback")
-            if (isMainHandler) {
-                ChoreographerKT.mainHandler.post { canvasHandler.setAnimationFrameCallback(callback) }
+            val targetHandler = getAnimHandler()
+            if (Looper.myLooper() == targetHandler.looper) {
+                canvasHandler.setAnimationFrameCallback(callback)
             } else {
-                ChoreographerKT.animViewHandler.post { canvasHandler.setAnimationFrameCallback(callback) }
+                targetHandler.post { canvasHandler.setAnimationFrameCallback(callback) }
             }
         }
     }
 
     override fun pause() {
         isResume.getAndSet(false)
-        if (isMainHandler) {
-            if (Looper.myLooper() == Looper.getMainLooper()) {
-                canvasHandler.removeCallback()
-            } else {
-                ChoreographerKT.mainHandler.post { canvasHandler.removeCallback() }
-            }
+        val targetHandler = getAnimHandler()
+        if (Looper.myLooper() == targetHandler.looper) {
+            canvasHandler.removeCallback()
         } else {
-            if (Looper.myLooper() == ChoreographerKT.animViewHandler.looper) {
-                canvasHandler.removeCallback()
-            } else {
-                ChoreographerKT.animViewHandler.post { canvasHandler.removeCallback() }
-            }
+            targetHandler.post { canvasHandler.removeCallback() }
         }
     }
 
@@ -90,6 +89,10 @@ open class AnimPlayer(
 
     override fun removeAnimId(animId: Long) {
         pathObjectDeal.removeAnimId(animId, isCancel = true)
+    }
+
+    override fun setAnimVisible(animId: Long, isVisible: Boolean) {
+        pathObjectDeal.setAnimVisible(animId, isVisible)
     }
 
 

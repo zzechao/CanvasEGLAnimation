@@ -58,9 +58,9 @@ class EGLHelper {
         }
 
         // 3、资源配置，例如颜色配置等
-        val attribList = intArrayOf(
+        var attribList = intArrayOf(
             EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT,  // 指定渲染api类别
-            EGL14.EGL_SURFACE_TYPE, EGL14.EGL_WINDOW_BIT,
+            EGL14.EGL_SURFACE_TYPE, EGL14.EGL_WINDOW_BIT or EGL14.EGL_PBUFFER_BIT,
             EGL14.EGL_RED_SIZE, 8,
             EGL14.EGL_GREEN_SIZE, 8,
             EGL14.EGL_BLUE_SIZE, 8,
@@ -71,15 +71,33 @@ class EGLHelper {
         val numConfigs = IntArray(1)
 
         // 4、ChooseConfig
-        if (!EGL14.eglChooseConfig(mEGLDisplay, attribList, 0, configs, 0, configs.size, numConfigs, 0)) {
-            throw RuntimeException("unable to find RGB8888 / ${version[0]}.${version[1]} EGLConfig")
+        if (!EGL14.eglChooseConfig(mEGLDisplay, attribList, 0, configs, 0, configs.size, numConfigs, 0) || configs[0] == null) {
+            attribList = intArrayOf(
+                EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT,
+                EGL14.EGL_SURFACE_TYPE, EGL14.EGL_WINDOW_BIT,
+                EGL14.EGL_RED_SIZE, 8,
+                EGL14.EGL_GREEN_SIZE, 8,
+                EGL14.EGL_BLUE_SIZE, 8,
+                EGL14.EGL_ALPHA_SIZE, 8,
+                EGL14.EGL_NONE
+            )
+            if (!EGL14.eglChooseConfig(mEGLDisplay, attribList, 0, configs, 0, configs.size, numConfigs, 0) || configs[0] == null) {
+                throw RuntimeException("unable to find RGB8888 / ${version[0]}.${version[1]} EGLConfig")
+            }
         }
         mEGLConfig = configs[0]
 
-        // 5、创建上下文（支持传入 shareContext 共享纹理命名空间）
+        // 5、创建上下文（支持传入 shareContext 共享纹理命名空间，失败时自动降级独立上下文）
         val attrib2List = intArrayOf(EGL14.EGL_CONTEXT_CLIENT_VERSION, 2, EGL14.EGL_NONE)
-        val context = EGL14.eglCreateContext(mEGLDisplay, mEGLConfig, shareContext, attrib2List, 0)
-        if (context == EGL14.EGL_NO_CONTEXT) throw RuntimeException("eglCreateContext error")
+        var context = if (shareContext != EGL14.EGL_NO_CONTEXT) {
+            EGL14.eglCreateContext(mEGLDisplay, mEGLConfig, shareContext, attrib2List, 0)
+        } else {
+            EGL14.EGL_NO_CONTEXT
+        }
+        if (context == EGL14.EGL_NO_CONTEXT) {
+            context = EGL14.eglCreateContext(mEGLDisplay, mEGLConfig, EGL14.EGL_NO_CONTEXT, attrib2List, 0)
+        }
+        if (context == EGL14.EGL_NO_CONTEXT) throw RuntimeException("eglCreateContext error: 0x${Integer.toHexString(EGL14.eglGetError())}")
         mEGLContext = context
 
         // 6、创建渲染Surface
@@ -128,11 +146,10 @@ class EGLHelper {
 
         if (mEGLDisplay != EGL14.EGL_NO_DISPLAY) {
             EGL14.eglReleaseThread()
-            EGL14.eglTerminate(mEGLDisplay)
             mEGLDisplay = EGL14.EGL_NO_DISPLAY
         }
 
         mEGLConfig = null
-        Animer.log.d        (TAG, "egl destroy success!")
+        Animer.log.d(TAG, "egl destroy success!")
     }
 }

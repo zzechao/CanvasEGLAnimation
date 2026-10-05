@@ -1,5 +1,6 @@
 package com.base.animation
 
+import android.os.Process
 import com.base.animation.log.DefaultLog
 import com.base.animation.log.ILog
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -34,8 +35,14 @@ object Animer {
         private val mThreadId = AtomicInteger(0)
 
         override fun newThread(r: Runnable): Thread {
-            val t = Thread(r)
-            t.name = String.format(AnimThreadName, mThreadId.getAndIncrement())
+            val t = Thread({
+                try {
+                    Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY)
+                } catch (t: Throwable) {
+                    // ignore
+                }
+                r.run()
+            }, String.format(AnimThreadName, mThreadId.getAndIncrement()))
             return t
         }
     }
@@ -44,8 +51,14 @@ object Animer {
         private val mThreadId = AtomicInteger(0)
 
         override fun newThread(r: Runnable): Thread {
-            val t = Thread(r)
-            t.name = String.format(CalculationThreadName, mThreadId.getAndIncrement())
+            val t = Thread({
+                try {
+                    Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY)
+                } catch (t: Throwable) {
+                    // ignore
+                }
+                r.run()
+            }, String.format(CalculationThreadName, mThreadId.getAndIncrement()))
             return t
         }
     }

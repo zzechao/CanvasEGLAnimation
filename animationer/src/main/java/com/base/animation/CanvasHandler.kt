@@ -23,14 +23,15 @@ class CanvasHandler {
     private val mFrameCallback: Choreographer.FrameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
             isFrameScheduled = false
-            if (lastTime == 0L) {
-                lastTime = System.nanoTime()
-                doAnimationFrame(0L)
-            } else {
-                val curFrameTime = System.nanoTime()
-                val frameDuringTime = curFrameTime - lastTime
-                lastTime = curFrameTime
-                doAnimationFrame(frameDuringTime / 1000000)
+            com.base.animation.gles.utils.traceSection("Canvas_doFrame") {
+                if (lastTime == 0L) {
+                    lastTime = frameTimeNanos
+                    doAnimationFrame(0L)
+                } else {
+                    val frameDuringTime = (frameTimeNanos - lastTime).coerceAtLeast(0L)
+                    lastTime = frameTimeNanos
+                    doAnimationFrame(frameDuringTime / 1000000)
+                }
             }
             if (mCanvasCallbacks != null) {
                 isFrameScheduled = true
@@ -64,17 +65,22 @@ class CanvasHandler {
     }
 
     private fun doAnimationFrame(frameTime: Long) {
-        Animer.log.i(TAG,"doAnimationFrame frameTime:$frameTime")
         mCanvasCallbacks?.doCanvasFrame(frameTime)
     }
 
     private class MyFrameCallbackProvider : CanvasFrameCallbackProvider {
+        private var boundChoreographer: Choreographer? = null
+
         override fun postFrameCallback(callback: Choreographer.FrameCallback?) {
-            callback?.let { ChoreographerKT.getChoreographer()?.postFrameCallback(it) }
+            val c = ChoreographerKT.getChoreographer()
+            boundChoreographer = c
+            callback?.let { c?.postFrameCallback(it) }
         }
 
         override fun removeFrameCallback(callback: Choreographer.FrameCallback?) {
-            callback?.let { ChoreographerKT.getChoreographer()?.removeFrameCallback(it) }
+            val c = boundChoreographer ?: ChoreographerKT.getChoreographer()
+            callback?.let { c?.removeFrameCallback(it) }
+            boundChoreographer = null
         }
     }
 

@@ -1,26 +1,24 @@
 package com.base.animation.gles
 
 import android.graphics.SurfaceTexture
+import android.os.Handler
 import com.base.animation.Animer
 import com.base.animation.CanvasHandler
+import com.base.animation.ChoreographerKT
 import com.base.animation.DoubleLinkedReference
 import com.base.animation.common.AnimPlayer
 import com.base.animation.fpsTime
 import com.base.animation.model.AnimPathObject
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.SendChannel
-import kotlinx.coroutines.channels.actor
-import java.util.concurrent.Executors
 
 /**
  * @author zzechao
  * @date 2025/3/19 15:46
- * @description EGL动画播放
+ * @description EGL动画播放器（方案A：Choreographer 硬件直驱模式）
+ * 核心特性：
+ * 1. Choreographer 硬件 VSYNC 直接入驻 EGL-GroupThread 渲染线程；
+ * 2. 0 次跨线程中转，VSYNC 触发后立即就地渲染并 swapBuffers；
+ * 3. 彻底淘汰中间 HandlerThread 和协程 Channel 消息队列，0 消息延迟，0 额外对象分配。
  * @param render 渲染器
- * @param glScope 协程作用域
- * @param glActor 协程通道
  */
 class EGLAnimPlayer(private val render: EGLRender = EGLRender()) : AnimPlayer(false), IRenderer by render, CanvasHandler.CanvasFrameCallback {
 
@@ -28,41 +26,58 @@ class EGLAnimPlayer(private val render: EGLRender = EGLRender()) : AnimPlayer(fa
         private const val TAG = "EGLAnimPlayer"
     }
 
-    private var glScope: CoroutineScope? = null
-    private var glActor: SendChannel<EGLAction>? = null
+    private var renderGroup: EGLRenderGroup? = null
+
+    /**
+     * 将动画节拍 Looper 线程定向到本 EGL 组专属的 GL 工作线程
+     */
+    override fun getAnimHandler(): Handler {
+        return renderGroup?.handler ?: ChoreographerKT.animViewHandler
+    }
 
     override fun resume() {
-        safeOffer(EGLAction(EGLAction.MSG_RESUME) { super.resume() })
+        renderGroup?.handler?.post { super.resume() } ?: super.resume()
     }
 
     override fun pause() {
-        safeOffer(EGLAction(EGLAction.MSG_PAUSE) { super.pause() })
+        super.pause()
+    }
+
+    override fun endAnimation() {
+        super.endAnimation()
     }
 
     override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
-        safeOffer(EGLAction(EGLAction.MSG_INIT) {
+        if (renderGroup == null || renderGroup!!.isReleased.get()) {
+            initGroup()
+        }
+        renderGroup?.handler?.post {
             render.onSurfaceTextureAvailable(surface, width, height)
-        }).onFailure { release() }
+        }
     }
 
     override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {
-        safeOffer(EGLAction(EGLAction.MSG_SIZE_CHANGED) {
+        renderGroup?.handler?.post {
             render.onSurfaceTextureSizeChanged(surface, width, height)
-        })
+        }
     }
 
     override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
         setCanvasFrameCallback(null)
-        val result = safeOffer(EGLAction(EGLAction.MSG_DESTROY) {
-            release()
-            try {
-                surface.release()
-            } catch (e: Throwable) {
-                Animer.log.e(TAG, "surface release error: ${e.message}")
+        val group = renderGroup
+        if (group != null && !group.isReleased.get()) {
+            group.handler.post {
+                release()
+                cleanupGroup()
+                try {
+                    surface.release()
+                } catch (e: Throwable) {
+                    Animer.log.e(TAG, "surface release error: ${e.message}")
+                }
             }
-        })
-        if (result.isFailure || glActor?.isClosedForSend == true) {
+        } else {
             release()
+            cleanupGroup()
             try {
                 surface.release()
             } catch (e: Throwable) {
@@ -72,60 +87,90 @@ class EGLAnimPlayer(private val render: EGLRender = EGLRender()) : AnimPlayer(fa
         return false
     }
 
-    private var nanoTime = 0L
+    /**
+     * 关键渲染回调：由当前 GL 线程的 Choreographer 硬件 VSYNC 直接就地调用！
+     * 0 跨线程延迟，0 任务打包分配，立即执行 GPU 渲染
+     */
     override fun doCanvasFrame(frameTime: Long): Boolean {
-        val framePositionCount = if (frameTime == 0L) {
-            1
-        } else {
-            val framePositionCount = frameTime / fpsTime
-            if (framePositionCount <= 1) {
+        return com.base.animation.gles.utils.traceSection("EGL_doCanvasFrame") {
+            val framePositionCount = if (frameTime <= 0L) {
                 1
             } else {
-                framePositionCount.toInt()
+                val count = (frameTime / fpsTime).toInt()
+                if (count <= 1) 1 else count
             }
-        }
-        safeOffer(EGLAction(EGLAction.MSG_PLAY) {
-            val ids = pathObjectDeal.animDrawIds.toList()
-            val data = pathObjectDeal.animDrawObjects.toMap()
-            if (System.currentTimeMillis() - nanoTime > 10000) {
-                nanoTime = System.currentTimeMillis()
-                Animer.log.d(TAG, "doCanvasFrameMSG_PLAY ids:$ids")
-            }
-            if (ids.isNotEmpty()) {
-                render.drawRenderBegin()
-                kotlin.runCatching {
-                    ids.forEach { data[it]?.drawRender(render, pathObjectDeal, framePositionCount, frameTime) }
-                }
-                render.drawRenderEnd()
-                mTouchPointF?.let { DoubleLinkedReference(it) }?.let {
-                    val size = ids.size - 1
-                    for (index in size downTo 0) {
-                        data[ids[index]]?.touch(pathObjectDeal, it)
+
+            try {
+                val ids = pathObjectDeal.animDrawIds
+                val data = pathObjectDeal.animDrawObjects
+                if (ids.isNotEmpty()) {
+                    com.base.animation.gles.utils.traceSection("EGL_Frame_Render") {
+                        com.base.animation.gles.utils.traceSection("EGL_drawRenderBegin") {
+                            render.drawRenderBegin()
+                        }
+                        try {
+                            com.base.animation.gles.utils.traceSection("EGL_drawItems_all") {
+                                val size = ids.size
+                                for (i in 0 until size) {
+                                    val id = ids.getOrNull(i) ?: continue
+                                    data[id]?.drawRender(render, pathObjectDeal, framePositionCount, frameTime)
+                                }
+                            }
+                        } catch (t: Throwable) {
+                            // ignore render exception
+                        }
+                        com.base.animation.gles.utils.traceSection("EGL_drawRenderEnd_and_swap") {
+                            render.drawRenderEnd()
+                        }
+                        mTouchPointF?.let { DoubleLinkedReference(it) }?.let {
+                            com.base.animation.gles.utils.traceSection("EGL_touch_check") {
+                                val size = ids.size
+                                for (i in size - 1 downTo 0) {
+                                    val id = ids.getOrNull(i) ?: continue
+                                    data[id]?.touch(pathObjectDeal, it)
+                                }
+                                mTouchPointF = null
+                            }
+                        }
                     }
-                    mTouchPointF = null
+                } else {
+                    pause()
+                    render.drawRenderBegin()
+                    render.drawRenderEnd()
+                    pathObjectDeal.animDrawObjects.clear()
                 }
-            } else {
-                pause()
-                setCanvasFrameCallback(null)
-                render.drawRenderBegin()
-                render.drawRenderEnd()
-                pathObjectDeal.animDrawObjects.clear()
+            } catch (e: Throwable) {
+                Animer.log.e(TAG, "render error: $e")
             }
-        })
-        return true
+            true
+        }
     }
 
     override fun addAnimDisplay(animPathObject: AnimPathObject) {
-        super.addAnimDisplay(animPathObject)
+        if (renderGroup == null || renderGroup!!.isReleased.get()) {
+            initGroup()
+        }
         setCanvasFrameCallback(this)
+        super.addAnimDisplay(animPathObject)
+    }
+
+    fun onAttachedToWindow() {
+        setCanvasFrameCallback(this)
+        initGroup()
     }
 
     fun onDetachedFromWindow() {
-        safeOffer(EGLAction(EGLAction.MSG_RELEASE) {
+        setCanvasFrameCallback(null)
+        val group = renderGroup
+        if (group != null && !group.isReleased.get()) {
+            group.handler.post {
+                release()
+                cleanupGroup()
+            }
+        } else {
             release()
-            glActor?.close()
-            glScope?.cancel()
-        })
+            cleanupGroup()
+        }
     }
 
     private fun release() {
@@ -134,28 +179,21 @@ class EGLAnimPlayer(private val render: EGLRender = EGLRender()) : AnimPlayer(fa
         render.release()
     }
 
-    fun onAttachedToWindow() {
-        initActor()
+    @Synchronized
+    private fun initGroup() {
+        if (renderGroup != null && !renderGroup!!.isReleased.get()) {
+            return
+        }
+        cleanupGroup()
+        val group = EGLGroupManager.obtainGroup()
+        renderGroup = group
+        render.attachGroup(group)
     }
 
-    private fun initActor() {
-        glActor?.close()
-        glScope?.cancel()
-        glScope = CoroutineScope(
-            Executors.newSingleThreadExecutor().asCoroutineDispatcher() + Animer.exceptionHandler
-        )
-        glActor = glScope?.actor(capacity = 50) {
-            for (msg in channel) {
-                Animer.log.d(TAG, "actor EGLAction:${msg.description()} run")
-                msg.action()
-            }
-        }
-        glActor?.invokeOnClose {
-            release()
-        }
-    }
-
-    private fun safeOffer(msg: EGLAction): Result<Unit> {
-        return kotlin.runCatching { glActor?.offer(msg) }
+    @Synchronized
+    private fun cleanupGroup() {
+        val group = renderGroup ?: return
+        renderGroup = null
+        EGLGroupManager.releaseGroup(group)
     }
 }

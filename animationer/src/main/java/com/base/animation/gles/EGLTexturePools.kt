@@ -2,12 +2,9 @@ package com.base.animation.gles
 
 
 import android.opengl.GLES20
+import android.util.LruCache
 import com.base.animation.Animer
-import com.google.common.cache.Cache
-import com.google.common.cache.CacheBuilder
-import com.google.common.cache.RemovalListener
 import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.TimeUnit
 
 /**
  * @author zzechao
@@ -18,7 +15,7 @@ class EGLTexturePools {
 
     companion object {
         private const val TAG = "EGLTexturePools"
-        private const val DISPLAYMAXCACHESIZE = 50L
+        private const val DISPLAYMAXCACHESIZE = 200
     }
 
     private var nanoTime = 0L
@@ -26,18 +23,10 @@ class EGLTexturePools {
     // 暂存因过期或被淘汰的纹理，在 GL 线程被调度时安全释放，杜绝显存泄漏
     private val pendingEvictedTextures = ConcurrentLinkedQueue<EGLAnimTexture>()
 
-    private val textureCaches: Cache<Int, EGLAnimTexture> by lazy {
-        CacheBuilder.newBuilder()
-            .concurrencyLevel(4)
-            .maximumSize(DISPLAYMAXCACHESIZE)
-            .initialCapacity(10)
-            .expireAfterAccess(60, TimeUnit.SECONDS)
-            .removalListener(RemovalListener<Int, EGLAnimTexture> { notification ->
-                notification.value?.let {
-                    pendingEvictedTextures.offer(it)
-                }
-            })
-            .build()
+    private val textureCaches = object : LruCache<Int, EGLAnimTexture>(DISPLAYMAXCACHESIZE) {
+        override fun entryRemoved(evicted: Boolean, key: Int, oldValue: EGLAnimTexture, newValue: EGLAnimTexture?) {
+            pendingEvictedTextures.offer(oldValue)
+        }
     }
 
     /**
@@ -61,46 +50,55 @@ class EGLTexturePools {
         }
     }
 
+    @Synchronized
     fun getTexture(bitmapHash: Int, createTexture: () -> EGLAnimTexture): EGLAnimTexture {
-        pollAndReleaseEvictedTextures()
-        return textureCaches.getIfPresent(bitmapHash)?.let {
-            if (System.currentTimeMillis() - nanoTime > 10000) {
-                nanoTime = System.currentTimeMillis()
-                Animer.log.i(TAG, "$bitmapHash size:${textureCaches.size()} ${GLES20.glIsTexture(it.textureId)}")
-            }
-            if (GLES20.glIsTexture(it.textureId)) {
-                it
-            } else {
-                Animer.log.i(TAG, "getTexture glIsTexture invalid $it $bitmapHash size:${textureCaches.size()}")
-                if (it.textureId > 0) {
-                    GLES20.glDeleteTextures(1, intArrayOf(it.textureId), 0)
-                }
-                itemRelease(it)
-                createTexture().apply { putTexture(bitmapHash, this) }
-            }
-        } ?: createTexture().also {
-            putTexture(bitmapHash, it)
+        // 淘汰纹理的释放统一在 drawRenderBegin 每帧调用 pollAndReleaseEvictedTextures，这里不再逐次 poll
+        val cached = textureCaches.get(bitmapHash)
+        if (cached != null && cached.textureId > 0) {
+            return cached
         }
+        if (cached != null) {
+            itemRelease(cached)
+            textureCaches.remove(bitmapHash)
+        }
+        val newTexture = createTexture()
+        if (newTexture.textureId > 0) {
+            putTexture(bitmapHash, newTexture)
+        }
+        return newTexture
     }
 
     private fun itemRelease(animTexture: EGLAnimTexture) {
         try {
+            if (animTexture.textureId > 0) {
+                GLES20.glDeleteTextures(1, intArrayOf(animTexture.textureId), 0)
+                animTexture.textureId = 0
+            }
             animTexture.surface?.release()
             animTexture.surface = null
             animTexture.surfaceTexture?.release()
             animTexture.surfaceTexture = null
-        } catch (_: Exception) {
+        } catch (e: Exception) {
         }
     }
 
-    private fun putTexture(bitmapHash: Int, textureId: EGLAnimTexture) {
-        textureCaches.put(bitmapHash, textureId)
+    @Synchronized
+    fun getTextureIfPresent(bitmapHash: Int): EGLAnimTexture? {
+        val cached = textureCaches.get(bitmapHash)
+        return if (cached != null && cached.textureId > 0) cached else null
     }
 
-    fun textureCacheMap() = textureCaches.asMap()
+    @Synchronized
+    fun putTexture(bitmapHash: Int, textureId: EGLAnimTexture) {
+        if (textureId.textureId > 0) {
+            textureCaches.put(bitmapHash, textureId)
+        }
+    }
+
+    fun textureCacheMap() = textureCaches.snapshot()
 
     fun clear() {
-        textureCaches.invalidateAll()
+        textureCaches.evictAll()
         pollAndReleaseEvictedTextures()
     }
 }

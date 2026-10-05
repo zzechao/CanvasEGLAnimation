@@ -84,21 +84,26 @@ class DrawObject2(val animId: Long, override val extra: String) : BaseAnimDrawOb
 
     override fun draw(canvas: Canvas, pathObjectDeal: IPathObjectDeal, framePositionCount: Int, frameTime: Long) {
         pathDrawable(pathObjectDeal, frameTime) { drawObject ->
-            draw(canvas, drawObject.point.x, drawObject.point.y, drawObject.alpha, drawObject.scaleX, drawObject.scaleY, drawObject.rotation)
+            if (isVisible) {
+                draw(canvas, drawObject.point.x, drawObject.point.y, drawObject.alpha, drawObject.scaleX, drawObject.scaleY, drawObject.rotation)
+            }
         }
     }
 
     override fun drawRender(render: EGLRender, pathObjectDeal: IPathObjectDeal, framePositionCount: Int, frameTime: Long) {
         pathDrawable(pathObjectDeal, frameTime) { drawObject ->
-            drawRender(
-                animId,
-                render,drawObject.point.x, drawObject.point.y, drawObject.alpha,
-                drawObject.scaleX, drawObject.scaleY, drawObject.rotation
-            )
+            if (isVisible) {
+                drawRender(
+                    animId,
+                    render,drawObject.point.x, drawObject.point.y, drawObject.alpha,
+                    drawObject.scaleX, drawObject.scaleY, drawObject.rotation
+                )
+            }
         }
     }
 
     override fun touch(pathObjectDeal: IPathObjectDeal, touchPoint: DoubleLinkedReference<PointF>?) {
+        if (!isVisible) return
         if (status == Status.START || status == Status.DRAWING) {
             animDraws[currencyPosition]?.forEach { drawObject ->
                 if (drawObject.clickable && touchPoint != null && pathObjectDeal.onItemListener != null) {

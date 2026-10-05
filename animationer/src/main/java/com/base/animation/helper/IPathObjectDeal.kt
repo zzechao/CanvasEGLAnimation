@@ -31,4 +31,6 @@ interface IPathObjectDeal {
     fun hasTask(): Boolean
 
     fun removeAnimId(animId: Long, isCancel: Boolean = false)
+
+    fun setAnimVisible(animId: Long, isVisible: Boolean)
 }

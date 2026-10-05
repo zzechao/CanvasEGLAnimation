@@ -33,6 +33,7 @@ import kotlinx.coroutines.ObsoleteCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
 import kotlin.math.abs
 
@@ -55,6 +56,8 @@ class TestAnimCanvasFragment3 : Fragment(), OnAnimItemClick {
         BitmapLoader.decodeBitmapFrom(resources, R.mipmap.red, 1, 300, 300)
     }
 
+    private val rewardUrl = "https://turnover-cn.oss-cn-hangzhou.aliyuncs.com/turnover/1670379863915_948.png"
+    private var rewardBitmap: Bitmap? = null
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
@@ -64,6 +67,13 @@ class TestAnimCanvasFragment3 : Fragment(), OnAnimItemClick {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        Glide.with(this).asBitmap().load(rewardUrl).override(200, 200).into(object : CustomTarget<Bitmap>() {
+            override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
+                rewardBitmap = resource
+            }
+
+            override fun onLoadCleared(placeholder: Drawable?) {}
+        })
         val ids = mutableSetOf<Long>()
         anim_surface.addAnimListener(object : IAnimListener {
             override fun onStartAnim(animId: Long, extra: String) {
@@ -383,75 +393,85 @@ class TestAnimCanvasFragment3 : Fragment(), OnAnimItemClick {
 
     /**
      * 动画雨
+     * 随机排期与 Node 构建放到 Default 线程计算，主线程仅负责读取屏幕尺寸与发起播放，
+     * 避免点击瞬间在主线程同步构建 20 个节点（Trace 实测 ~70ms）造成掉帧。
      */
     private fun startAnimRain() {
         val size = 300
+        val screenWidth = DisplayUtils.getScreenWidth(this.activity)
         val height = DisplayUtils.getScreenHeight(this.activity).toFloat()
         val indexSize = 20
-        val checkOverlapping = mutableMapOf<Long, Int>()
-        for (i in 0 until indexSize) {
-            val locationX = getLocationX(size, 3000L, 0L, checkOverlapping)
-            checkOverlapping[locationX.delayTime] = locationX.itemLocationX
-
-            val node = AnimEncoder().buildAnimNode {
-                imageNode {
-                    this.url = "${R.mipmap.red}"
-                    this.displayHeightSize = size
-                    this.clickable = true
-                    this.extras = "rain"
-                    startNode {
-                        point = PointF(locationX.itemLocationX.toFloat(), 0f)
-                        scaleX = 1f
-                        scaleY = 1f
-                        endNode {
-                            point = PointF(locationX.itemLocationX.toFloat(), height)
-                            scaleX = 1f
-                            scaleY = 1f
-                            durTime = 2000L
-                            interpolator = InterpolatorEnum.Linear.type
+        // 预热：red 为 lazy 解码，提前在后台触发，避免第一个红包在主线程解码
+        lifecycleScope.launch(Dispatchers.Default) {
+            val bitmap = red
+            val checkOverlapping = mutableMapOf<Long, Int>()
+            val plans = ArrayList<Pair<Long, com.base.animation.node.AnimNode>>(indexSize)
+            com.base.animation.gles.utils.traceSection("Rain_buildPlans") {
+                for (i in 0 until indexSize) {
+                    val locationX = getLocationX(screenWidth, size, 3000L, 0L, checkOverlapping)
+                    checkOverlapping[locationX.delayTime] = locationX.itemLocationX
+                    val node = AnimEncoder().buildAnimNode {
+                        imageNode {
+                            this.url = "${R.mipmap.red}"
+                            this.displayHeightSize = size
+                            this.clickable = true
+                            this.extras = "rain"
+                            startNode {
+                                point = PointF(locationX.itemLocationX.toFloat(), 0f)
+                                scaleX = 1f
+                                scaleY = 1f
+                                endNode {
+                                    point = PointF(locationX.itemLocationX.toFloat(), height)
+                                    scaleX = 1f
+                                    scaleY = 1f
+                                    durTime = 2000L
+                                    interpolator = InterpolatorEnum.Linear.type
+                                }
+                            }
                         }
                     }
+                    plans.add(locationX.delayTime to node)
                 }
             }
-
-            lifecycleScope.launch {
-                delay(locationX.delayTime)
-                anim_surface ?: return@launch
-                AnimDecoder2.suspendPlayAnimWithAnimNode(anim_surface, node) { node, displayItem ->
-                    when (displayItem) {
-                        is BitmapDisplayItem -> {
-                            displayItem.mBitmap = red
+            // 回到主线程发起各自延时播放（与原逻辑一致）
+            withContext(Dispatchers.Main) {
+                com.base.animation.gles.utils.traceSection("Rain_startAnimRain") {
+                    for ((delayTime, node) in plans) {
+                        lifecycleScope.launch {
+                            delay(delayTime)
+                            anim_surface ?: return@launch
+                            AnimDecoder2.suspendPlayAnimWithAnimNode(anim_surface, node) { _, displayItem ->
+                                when (displayItem) {
+                                    is BitmapDisplayItem -> {
+                                        displayItem.mBitmap = bitmap
+                                    }
+                                }
+                                displayItem
+                            }
                         }
                     }
-                    displayItem
                 }
             }
         }
     }
 
-    private fun getLocationX(size: Int, totalTime: Long, duringTime: Long, checkOverlapping: MutableMap<Long, Int>): LocationX {
-        val width = DisplayUtils.getScreenWidth(this.activity)
+    private fun getLocationX(width: Int, size: Int, totalTime: Long, duringTime: Long, checkOverlapping: MutableMap<Long, Int>): LocationX {
         var time = (0L..totalTime).random()
         var itemLocationX = (size / 2..(width - size / 2)).random()
         var timeList = checkOverlapping.filter { abs(it.key - time) < duringTime }
-        Log.i("ttt", "timeList:${timeList.size}")
         while (timeList.size > 2) {
             time = (0L..totalTime).random()
             timeList = checkOverlapping.filter { abs(it.key - time) < duringTime }
-            Log.i("ttt", "update timeList:${timeList.size}")
         }
-        Log.i("ttt", "itemLocationX:$itemLocationX time:$time")
         var itemList = timeList.filter { abs(itemLocationX - it.value) < size / 2 }
-        Log.i("ttt", "itemList:${itemList.size}")
         var i = 0
         while (itemList.isNotEmpty()) {
             itemLocationX = (size / 2..(width - size / 2)).random()
             itemList = timeList.filter { abs(itemLocationX - it.value) < size / 2 }
             i++
             if (i > 5) {
-                return getLocationX(size, totalTime, duringTime, checkOverlapping)
+                return getLocationX(width, size, totalTime, duringTime, checkOverlapping)
             }
-            Log.i("ttt", "update itemList:${itemList.size} itemLocationX:$itemLocationX timeList:${timeList.values.map { it.toString() }}")
         }
 
         return LocationX().apply {
@@ -467,48 +487,40 @@ class TestAnimCanvasFragment3 : Fragment(), OnAnimItemClick {
     }
 
     override fun itemClick(animId: Long, animDrawObject: AnimDrawObject, touchPointF: PointF, itemCenterPointF: PointF, extra: String) {
-        Toast.makeText(this@TestAnimCanvasFragment3.context, "$animId $extra", Toast.LENGTH_SHORT).show()
-        anim_surface?.removeAnimId(animId)
-        val size = 200
-        val url = "https://turnover-cn.oss-cn-hangzhou.aliyuncs.com/turnover/1670379863915_948.png"
-        val width = DisplayUtils.getScreenWidth(this.activity).toFloat()
-        val height = DisplayUtils.getScreenHeight(this.activity).toFloat()
-        val node = AnimEncoder().buildAnimNode {
-            imageBezierNode {
-                this.url = url
-                this.displayHeightSize = size
-                startNode {
-                    point = itemCenterPointF
-                    scaleX = 1f
-                    scaleY = 1f
-                    endNode {
-                        point = PointF(width / 2f, height)
+        com.base.animation.gles.utils.traceSection("Rain_itemClick") {
+            anim_surface?.setAnimVisible(animId, false)
+            val size = 200
+            val width = DisplayUtils.getScreenWidth(this.activity).toFloat()
+            val height = DisplayUtils.getScreenHeight(this.activity).toFloat()
+            val node = AnimEncoder().buildAnimNode {
+                imageBezierNode {
+                    this.url = rewardUrl
+                    this.displayHeightSize = size
+                    startNode {
+                        point = itemCenterPointF
                         scaleX = 1f
                         scaleY = 1f
-                        durTime = 800L
-                        interpolator = InterpolatorEnum.Linear.type
-                    }
-                }
-            }
-        }
-        lifecycleScope.launch {
-            anim_surface ?: return@launch
-            AnimDecoder2.suspendPlayAnimWithAnimNode(anim_surface, node) { node, displayItem ->
-                when (displayItem) {
-                    is BitmapDisplayItem -> {
-                        displayItem.mBitmap = suspendCancellableCoroutine {
-                            Glide.with(this@TestAnimCanvasFragment3).asBitmap().load(url).into(object : CustomTarget<Bitmap>() {
-                                override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
-                                    it.resume(resource)
-                                }
-
-                                override fun onLoadCleared(placeholder: Drawable?) {
-                                }
-                            })
+                        endNode {
+                            point = PointF(width / 2f, height)
+                            scaleX = 1f
+                            scaleY = 1f
+                            durTime = 800L
+                            interpolator = InterpolatorEnum.Linear.type
                         }
                     }
                 }
-                displayItem
+            }
+            val targetBitmap = rewardBitmap ?: red
+            lifecycleScope.launch {
+                anim_surface ?: return@launch
+                AnimDecoder2.suspendPlayAnimWithAnimNode(anim_surface, node) { node, displayItem ->
+                    when (displayItem) {
+                        is BitmapDisplayItem -> {
+                            displayItem.mBitmap = targetBitmap
+                        }
+                    }
+                    displayItem
+                }
             }
         }
     }

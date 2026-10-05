@@ -16,13 +16,22 @@ object ChoreographerKT {
     private var mainChoreographer: Choreographer? = null
 
     internal val animViewHandler: Handler by lazy {
-        val handlerThread = HandlerThread("AnimPlayer_Handler")
+        val handlerThread = object : HandlerThread("AnimPlayer_Handler", android.os.Process.THREAD_PRIORITY_DISPLAY) {
+            override fun onLooperPrepared() {
+                super.onLooperPrepared()
+                try {
+                    android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_DISPLAY)
+                } catch (t: Throwable) {
+                    // ignore
+                }
+            }
+        }
         handlerThread.start()
         Handler(handlerThread.looper)
     }
 
     /**
-     * 根据不同looper 构造
+     * 根据不同looper 构造（支持主线程、SurfaceView专用后台线程以及各EGL渲染组线程）
      */
     fun getChoreographer(): Choreographer? {
         val looper = Looper.myLooper() ?: return null
@@ -31,10 +40,8 @@ object ChoreographerKT {
                 mainChoreographer = Choreographer.getInstance()
             }
             mainChoreographer
-        } else if (looper == animViewHandler.looper) {
-            Choreographer.getInstance()
         } else {
-            null
+            Choreographer.getInstance()
         }
     }
 }

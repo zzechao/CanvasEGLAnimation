@@ -2,8 +2,8 @@ package com.base.animation.item
 
 import android.content.Context
 import android.graphics.*
-import android.opengl.GLES11Ext
 import android.opengl.GLES20
+import android.opengl.GLUtils
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -55,35 +55,27 @@ class LayoutDisplayItem(val context: Context, private val layout: Int) : BaseDis
     override fun drawDisplayItem(animId: Long, render: EGLRender, x: Float, y: Float, alpha: Int, scaleX: Float, scaleY: Float, rotation: Float) {
         val maxSize = max(displayWidth, displayHeight).coerceAtLeast(1)
         val cacheKey = if (displayItemId.isNotEmpty()) displayItemId.hashCode() else this.hashCode()
-        render.drawItem(animId, cacheKey, maxSize, maxSize, x, y, alpha, scaleX, scaleY, rotation, ::getTextureIfPresent)
+        render.drawItem(animId, cacheKey, maxSize, maxSize, x, y, alpha, scaleX, scaleY, rotation, ::getTextureIfPresent, cullable = true)
     }
 
     private fun getTextureIfPresent(): EGLAnimTexture {
-        val externalTextureId = IntArray(1)
-        GLES20.glGenTextures(1, externalTextureId, 0)
-        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, externalTextureId[0])
-        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
-        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
-        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
-
-        // 创建SurfaceTexture和Surface
-        val textureId = externalTextureId[0]
-        val eglAnimTexture = EGLAnimTexture(textureId, EGLAnimTexture.TextureType.LAYOUT)
-        val surfaceTexture = SurfaceTexture(textureId)
         val maxSize = max(displayWidth, displayHeight).coerceAtLeast(1)
-        surfaceTexture.setDefaultBufferSize(maxSize, maxSize)
-        val surface = Surface(surfaceTexture)
-        eglAnimTexture.surfaceTexture = surfaceTexture
-        eglAnimTexture.surface = surface
-        val canvas = surface.lockCanvas(null)
-        canvas?.let {
-            it.withTranslation((maxSize - displayWidth) / 2f, (maxSize - displayHeight) / 2f) {
-                view.draw(it)
-            }
-            surface.unlockCanvasAndPost(canvas)
+        val bitmap = Bitmap.createBitmap(maxSize, maxSize, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.withTranslation((maxSize - displayWidth) / 2f, (maxSize - displayHeight) / 2f) {
+            view.draw(canvas)
         }
-        Animer.log.d(tag, "getTextureIfPresent: $textureId")
-        return eglAnimTexture
+        val texture2DId = IntArray(1)
+        GLES20.glGenTextures(1, texture2DId, 0)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture2DId[0])
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
+        GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0)
+        GLES20.glFlush()
+        bitmap.recycle()
+        return EGLAnimTexture(texture2DId[0], EGLAnimTexture.TextureType.BITMAP)
     }
 
     override fun getRotatePX(rotation: Float, scaleX: Float): Float {

@@ -12,10 +12,10 @@ import com.base.animation.helper.data.PathProcessItem
 import com.base.animation.item.BaseDisplayItem
 import com.base.animation.model.AnimDrawObject
 import com.base.animation.model.AnimPathObject
+import android.util.LruCache
 import com.base.animation.model.BaseAnimDrawObject
 import com.base.animation.model.DrawObject
 import com.base.animation.model.toAnimDrawObject
-import com.google.common.cache.CacheBuilder
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.GlobalScope.coroutineContext
@@ -25,7 +25,6 @@ import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CopyOnWriteArraySet
-import java.util.concurrent.TimeUnit
 
 /**
  * @author:zhouzechao
@@ -60,9 +59,8 @@ class PathObjectDeal(parserEnd: () -> Unit) : IPathObjectDeal {
     /**
      * 路径缓存
      */
-    private val pathCacheMap: com.google.common.cache.Cache<String, MutableMap<Int, MutableList<AnimDrawObject>>> =
-        CacheBuilder.newBuilder().concurrencyLevel(10).maximumSize(50).initialCapacity(10)
-            .expireAfterAccess(60, TimeUnit.SECONDS).build()
+    private val pathCacheMap: LruCache<String, MutableMap<Int, MutableList<AnimDrawObject>>> =
+        LruCache(50)
 
     /**
      * 计算路径上的各个坐标点
@@ -93,7 +91,7 @@ class PathObjectDeal(parserEnd: () -> Unit) : IPathObjectDeal {
                                 val displayItem = animPath.displayItemsMap[start.displayItemId] ?: getDisplayItem(start.displayItemId)
                                 var pathKey = "${fpsTime}_${start.key()}_${end.key()}_${duringTime}_${displayItem?.let { "${it::class.simpleName}_${it.isCalculate}" }}"
                                 pathKey = md.digest(pathKey.toByteArray(Charsets.UTF_8)).toHexString()
-                                drawsMap = pathCacheMap.get(pathKey) {
+                                drawsMap = pathCacheMap.get(pathKey) ?: run {
                                     val pathProcessItem = PathProcessItem(
                                         end.itemX, end.itemY, end.itemAlpha, end.itemScaleX, end.itemScaleY, end.itemRotation
                                     )
@@ -147,6 +145,7 @@ class PathObjectDeal(parserEnd: () -> Unit) : IPathObjectDeal {
                                     } else {
                                         startPosition = position
                                     }
+                                    pathCacheMap.put(pathKey, drawsMap)
                                     drawsMap
                                 }
                             }
@@ -188,15 +187,17 @@ class PathObjectDeal(parserEnd: () -> Unit) : IPathObjectDeal {
      * 清空执行中ids
      */
     override fun removeAnimId(animId: Long, isCancel: Boolean) {
-        Log.d(TAG, "removeAnimId:$animId isCancel:$isCancel")
         animDrawIds.remove(animId)
+        val animObject = animDrawObjects.remove(animId)
         if (isCancel && animListeners.isNotEmpty()) {
-            val map = animDrawObjects.toMap()
             animListeners.forEach {
-                val animObject = map[animId]
                 it.onCancelAnim(animId, animObject?.extra ?: "")
             }
         }
+    }
+
+    override fun setAnimVisible(animId: Long, isVisible: Boolean) {
+        animDrawObjects[animId]?.isVisible = isVisible
     }
 
     private fun ByteArray.toHexString(): String {

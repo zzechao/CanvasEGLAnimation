@@ -5,7 +5,8 @@ buildscript {
     apply from: "$rootDir/versions.gradle"
     ext.kotlin_version = "1.6.20"
     repositories {
-       // maven { url 'https://nexus-android.duowan.com/nexus/content/groups/public' }
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
         mavenCentral()
         google()
         jcenter()
@@ -24,7 +25,8 @@ buildscript {
 allprojects {
     apply from: "$rootDir/versions.gradle"
     repositories {
-        //maven { url 'https://nexus-android.duowan.com/nexus/content/groups/public' }
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
         mavenCentral()
         google()
         jcenter()

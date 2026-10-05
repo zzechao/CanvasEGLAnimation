@@ -12,6 +12,8 @@ import com.base.animation.helper.IPathObjectDeal
  */
 abstract class BaseAnimDrawObject(open val extra: String) {
 
+    var isVisible: Boolean = true
+
     abstract fun draw(canvas: Canvas, pathObjectDeal: IPathObjectDeal, framePositionCount: Int, frameTime: Long)
 
     abstract fun drawRender(render: EGLRender, pathObjectDeal: IPathObjectDeal, framePositionCount: Int, frameTime: Long)

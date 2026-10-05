@@ -54,8 +54,8 @@ open class BitmapDisplayItem : BaseDisplayItem() {
     override fun drawDisplayItem(animId: Long, render: EGLRender, x: Float, y: Float, alpha: Int, scaleX: Float, scaleY: Float, rotation: Float) {
         val bitmap = mBitmap ?: return
         if (bitmap.isRecycled) return
-        val cacheKey = bitmap.hashCode()
-        render.drawItem(animId, cacheKey, displayWidth, displayHeight, x, y, alpha, scaleX, scaleY, rotation, ::getTextureIfPresent)
+        val cacheKey = if (displayItemId.isNotEmpty()) displayItemId.hashCode() else bitmap.hashCode()
+        render.drawItem(animId, cacheKey, displayWidth, displayHeight, x, y, alpha, scaleX, scaleY, rotation, ::getTextureIfPresent, cullable = true)
     }
 
     private fun getTextureIfPresent(): EGLAnimTexture {
@@ -70,7 +70,10 @@ open class BitmapDisplayItem : BaseDisplayItem() {
             GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
             GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
             //根据以上指定的参数，生成一个2D纹理
-            GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0)
+            com.base.animation.gles.utils.traceSection("Bitmap_texImage2D_sync") {
+                GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0)
+            }
+            GLES20.glFlush()
             EGLAnimTexture(texture2DId[0], EGLAnimTexture.TextureType.BITMAP)
         } else EGLAnimTexture()
     }

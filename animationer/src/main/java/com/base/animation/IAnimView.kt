@@ -23,6 +23,8 @@ interface IAnimView {
 
     fun removeAnimId(animId: Long)
 
+    fun setAnimVisible(animId: Long, isVisible: Boolean)
+
     fun addAnimListener(iAnimListener: IAnimListener)
 
     fun removeAnimListener(iAnimListener: IAnimListener?)

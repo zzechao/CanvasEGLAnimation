@@ -125,12 +125,15 @@ class PathObjectDeal2(parserEnd: () -> Unit) : IPathObjectDeal {
      */
     override fun removeAnimId(animId: Long, isCancel: Boolean) {
         animDrawIds.remove(animId)
+        val animObject = animDrawObjects.remove(animId)
         if (isCancel && animListeners.isNotEmpty()) {
-            val map = animDrawObjects.toMap()
             animListeners.forEach {
-                val animObject = map[animId]
                 it.onCancelAnim(animId, animObject?.extra ?: "")
             }
         }
+    }
+
+    override fun setAnimVisible(animId: Long, isVisible: Boolean) {
+        animDrawObjects[animId]?.isVisible = isVisible
     }
 }

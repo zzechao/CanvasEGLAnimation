@@ -62,17 +62,22 @@ class DrawObject(val animId: Long, override val extra: String) : BaseAnimDrawObj
 
     override fun draw(canvas: Canvas, pathObjectDeal: IPathObjectDeal, framePositionCount: Int, frameTime: Long) {
         pathDrawable(pathObjectDeal, framePositionCount) { drawObject ->
-            draw(canvas, drawObject.point.x, drawObject.point.y, drawObject.alpha, drawObject.scaleX, drawObject.scaleY, drawObject.rotation)
+            if (isVisible) {
+                draw(canvas, drawObject.point.x, drawObject.point.y, drawObject.alpha, drawObject.scaleX, drawObject.scaleY, drawObject.rotation)
+            }
         }
     }
 
     override fun drawRender(render: EGLRender, pathObjectDeal: IPathObjectDeal, framePositionCount: Int, frameTime: Long) {
         pathDrawable(pathObjectDeal, framePositionCount) { drawObject ->
-            drawRender(animId, render, drawObject.point.x, drawObject.point.y, drawObject.alpha, drawObject.scaleX, drawObject.scaleY, drawObject.rotation)
+            if (isVisible) {
+                drawRender(animId, render, drawObject.point.x, drawObject.point.y, drawObject.alpha, drawObject.scaleX, drawObject.scaleY, drawObject.rotation)
+            }
         }
     }
 
     override fun touch(pathObjectDeal: IPathObjectDeal, touchPoint: DoubleLinkedReference<PointF>?) {
+        if (!isVisible) return
         if (status == Status.START || status == Status.DRAWING) {
             val touchPosition = (currencyPosition - 1).coerceAtLeast(0)
             animDraws[touchPosition]?.forEach { drawObject ->
