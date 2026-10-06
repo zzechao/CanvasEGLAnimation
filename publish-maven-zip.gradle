@@ -103,7 +103,7 @@ task zipMavenArtifacts(type: Zip) {
     def artifactPath = PUBLISH_ARTIFACT_ID
     def versionId = project.version
     
-    from "${localReleaseDest}/${groupPath}/${artifactPath}/${versionId}"
+    from(localReleaseDest)
     
     archiveFileName = "${PUBLISH_ARTIFACT_ID}-${versionId}-bundle.zip"
     destinationDirectory = file("${project.buildDir}/outputs/bundle")
