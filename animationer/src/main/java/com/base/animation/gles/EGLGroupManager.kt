@@ -74,7 +74,11 @@ object EGLGroupManager {
     /**
      * 当前所有组承载的 View 总数
      */
-    fun getTotalActiveViewCount(): Int = activeGroups.sumOf { it.viewCount.get() }
+    fun getTotalActiveViewCount(): Int {
+        var count = 0
+        activeGroups.forEach { count += it.viewCount.get() }
+        return count
+    }
 
     /**
      * 重置所有工作组（页面销毁或测试复位时调用）

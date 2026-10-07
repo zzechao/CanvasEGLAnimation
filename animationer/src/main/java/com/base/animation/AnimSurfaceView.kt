@@ -11,13 +11,9 @@ import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
-import com.base.animation.Animer.animThreadFactory
 import com.base.animation.common.AnimPlayer
 import com.base.animation.model.AnimPathObject
-import kotlinx.coroutines.*
-import java.util.concurrent.LinkedBlockingDeque
-import java.util.concurrent.ThreadPoolExecutor
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * @author:zhouzechao
@@ -32,8 +28,21 @@ open class AnimSurfaceView @JvmOverloads constructor(
         private const val TAG = "AnimSurfaceView"
     }
 
+    enum class ZOrderMode {
+        NORMAL,
+        MEDIA_OVERLAY,
+        ON_TOP
+    }
+
+    var zOrderMode: ZOrderMode = ZOrderMode.NORMAL
+        set(value) {
+            field = value
+            applyZOrder()
+        }
+
+    @Volatile
     private var isSurfaceRelease: Boolean = true
-    private var animScope: CoroutineScope? = null
+    private val isDrawing = AtomicBoolean(false)
 
     init {
         holder.addCallback(this)
@@ -42,20 +51,44 @@ open class AnimSurfaceView @JvmOverloads constructor(
         holder.setFormat(PixelFormat.TRANSPARENT)
     }
 
+    private fun applyZOrder() {
+        when (zOrderMode) {
+            ZOrderMode.MEDIA_OVERLAY -> {
+                super.setZOrderOnTop(false)
+                super.setZOrderMediaOverlay(true)
+            }
+            ZOrderMode.ON_TOP -> {
+                super.setZOrderMediaOverlay(false)
+                super.setZOrderOnTop(true)
+            }
+            ZOrderMode.NORMAL -> {
+                super.setZOrderMediaOverlay(false)
+                super.setZOrderOnTop(false)
+            }
+        }
+    }
+
+    override fun setZOrderOnTop(onTop: Boolean) {
+        zOrderMode = if (onTop) ZOrderMode.ON_TOP else ZOrderMode.NORMAL
+        super.setZOrderOnTop(onTop)
+    }
+
+    override fun setZOrderMediaOverlay(isMediaOverlay: Boolean) {
+        zOrderMode = if (isMediaOverlay) ZOrderMode.MEDIA_OVERLAY else ZOrderMode.NORMAL
+        super.setZOrderMediaOverlay(isMediaOverlay)
+    }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        setZOrderOnTop(true)
-        animScope = CoroutineScope(
-            ThreadPoolExecutor(
-            1, 1, 1000L, TimeUnit.MILLISECONDS, LinkedBlockingDeque(), animThreadFactory
-        ).asCoroutineDispatcher() + SupervisorJob() + Animer.exceptionHandler)
+        applyZOrder()
     }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         player.setCanvasFrameCallback(null)
         endAnimation()
-        animScope?.cancel()
+        isDrawing.set(false)
+        release()
     }
 
     override fun addAnimDisplay(animPathObject: AnimPathObject) {
@@ -89,6 +122,7 @@ open class AnimSurfaceView @JvmOverloads constructor(
 
     override fun surfaceCreated(holder: SurfaceHolder) {
         isSurfaceRelease = false
+        resume()
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
@@ -96,6 +130,7 @@ open class AnimSurfaceView @JvmOverloads constructor(
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         isSurfaceRelease = true
+        isDrawing.set(false)
         pause()
     }
 
@@ -106,6 +141,9 @@ open class AnimSurfaceView @JvmOverloads constructor(
 
     override fun doCanvasFrame(frameTime: Long): Boolean {
         if (isSurfaceRelease || !holder.surface.isValid) return true
+        if (!isDrawing.compareAndSet(false, true)) {
+            return true
+        }
         val framePositionCount = if (frameTime == 0L) {
             1
         } else {
@@ -116,29 +154,45 @@ open class AnimSurfaceView @JvmOverloads constructor(
                 framePositionCount.toInt()
             }
         }
-        animScope?.launch {
-            if (isSurfaceRelease || !holder.surface.isValid) return@launch
-            var canvas: Canvas? = null
-            try {
-                canvas = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        var canvas: Canvas? = null
+        try {
+            if (isSurfaceRelease || !holder.surface.isValid) {
+                return true
+            }
+            canvas = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                try {
                     holder.lockHardwareCanvas()
-                } else {
+                } catch (e: Throwable) {
+                    Animer.log.w(TAG, "lockHardwareCanvas skipped: ${e.message}")
+                    if (!isSurfaceRelease && holder.surface.isValid) {
+                        try {
+                            holder.lockCanvas()
+                        } catch (t: Throwable) {
+                            null
+                        }
+                    } else null
+                }
+            } else {
+                try {
                     holder.lockCanvas()
-                }
-                if (canvas != null) {
-                    drawAnimFps(canvas, framePositionCount, frameTime)
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                if (canvas != null) {
-                    try {
-                        holder.unlockCanvasAndPost(canvas)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
+                } catch (t: Throwable) {
+                    null
                 }
             }
+            if (canvas != null) {
+                drawAnimFps(canvas, framePositionCount, frameTime)
+            }
+        } catch (e: Exception) {
+            Animer.log.e(TAG, "drawAnimFps error: $e")
+        } finally {
+            if (canvas != null) {
+                try {
+                    holder.unlockCanvasAndPost(canvas)
+                } catch (e: Exception) {
+                    Animer.log.w(TAG, "unlockCanvasAndPost error: $e")
+                }
+            }
+            isDrawing.set(false)
         }
         return true
     }

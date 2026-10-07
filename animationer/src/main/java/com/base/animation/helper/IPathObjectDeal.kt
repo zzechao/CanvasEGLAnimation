@@ -33,4 +33,6 @@ interface IPathObjectDeal {
     fun removeAnimId(animId: Long, isCancel: Boolean = false)
 
     fun setAnimVisible(animId: Long, isVisible: Boolean)
+
+    fun release()
 }

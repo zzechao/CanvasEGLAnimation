@@ -38,4 +38,6 @@ interface IAnimView {
     fun drawAnim(canvas: Canvas?, framePositionCount: Int, frameTime: Long)
 
     fun touchAnimEvent(event: MotionEvent): Boolean
+    
+    fun release() {}
 }

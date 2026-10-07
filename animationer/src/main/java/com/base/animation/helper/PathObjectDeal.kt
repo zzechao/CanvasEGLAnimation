@@ -16,11 +16,9 @@ import android.util.LruCache
 import com.base.animation.model.BaseAnimDrawObject
 import com.base.animation.model.DrawObject
 import com.base.animation.model.toAnimDrawObject
-import kotlinx.coroutines.CoroutineExceptionHandler
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.GlobalScope.coroutineContext
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.channels.actor
-import kotlinx.coroutines.supervisorScope
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
@@ -31,12 +29,13 @@ import java.util.concurrent.CopyOnWriteArraySet
  * @date: 2020/12/9
  * description：处理animPathObject转每一帧的绘制点
  */
-class PathObjectDeal(parserEnd: () -> Unit) : IPathObjectDeal {
+class PathObjectDeal(private val parserEnd: () -> Unit) : IPathObjectDeal {
     companion object {
         private const val TAG = "PathObjectDeal"
     }
 
-    private val animDisplayScope = CoroutineScope(Animer.calculationDispatcher)
+    private var animDisplayScope: CoroutineScope? = null
+    private var animPather: SendChannel<AnimPathObject>? = null
 
     private val md by lazy { MessageDigest.getInstance("MD5") }
 
@@ -62,17 +61,31 @@ class PathObjectDeal(parserEnd: () -> Unit) : IPathObjectDeal {
     private val pathCacheMap: LruCache<String, MutableMap<Int, MutableList<AnimDrawObject>>> =
         LruCache(50)
 
+    init {
+        getOrInitPather()
+    }
+
     /**
-     * 计算路径上的各个坐标点
+     * 计算路径上的各个坐标点（按需懒加载/重建，支持在 release 之后重新创建）
      */
-    private val animPather = animDisplayScope.actor<AnimPathObject>(
-        Animer.exceptionHandler, capacity = 300
-    ) {
-        supervisorScope {
-            for (animPath in this@actor) {
-                if (animPath.displayItemsMap.isNotEmpty()) {
-                    AnimCache.displayItemCache.putDisplayItems(animPath.displayItemsMap)
-                }
+    @Synchronized
+    private fun getOrInitPather(): SendChannel<AnimPathObject> {
+        val currentPather = animPather
+        val currentScope = animDisplayScope
+        if (currentPather != null && !currentPather.isClosedForSend && currentScope != null && currentScope.isActive) {
+            return currentPather
+        }
+        val scope = CoroutineScope(Animer.calculationDispatcher + SupervisorJob() + Animer.exceptionHandler)
+        animDisplayScope = scope
+        val pather = scope.actor<AnimPathObject>(
+            Animer.exceptionHandler, capacity = 300
+        ) {
+            supervisorScope {
+                for (animPath in this@actor) {
+                    if (!isActive) break
+                    if (animPath.displayItemsMap.isNotEmpty()) {
+                        AnimCache.displayItemCache.putDisplayItems(animPath.displayItemsMap)
+                    }
                 var drawsMap = mutableMapOf<Int, MutableList<AnimDrawObject>>()
                 var position = 0
                 val drawObject = DrawObject(animPath.animId, animPath.expand)
@@ -159,6 +172,9 @@ class PathObjectDeal(parserEnd: () -> Unit) : IPathObjectDeal {
             }
         }
     }
+        animPather = pather
+        return pather
+    }
 
 
     /**
@@ -172,7 +188,7 @@ class PathObjectDeal(parserEnd: () -> Unit) : IPathObjectDeal {
      * 加入路径，并刷新画布缓存策略的时间
      */
     override fun sendAnimPath(animPathObject: AnimPathObject) {
-        animPather.offer(animPathObject)
+        getOrInitPather().offer(animPathObject)
     }
 
     /**
@@ -198,6 +214,22 @@ class PathObjectDeal(parserEnd: () -> Unit) : IPathObjectDeal {
 
     override fun setAnimVisible(animId: Long, isVisible: Boolean) {
         animDrawObjects[animId]?.isVisible = isVisible
+    }
+
+    override fun release() {
+        try {
+            animPather?.close()
+        } catch (t: Throwable) {
+            // ignore
+        }
+        animPather = null
+        animDisplayScope?.cancel()
+        animDisplayScope = null
+        animDrawIds.clear()
+        animDrawObjects.clear()
+        animListeners.clear()
+        onItemListener = null
+        pathCacheMap.evictAll()
     }
 
     private fun ByteArray.toHexString(): String {

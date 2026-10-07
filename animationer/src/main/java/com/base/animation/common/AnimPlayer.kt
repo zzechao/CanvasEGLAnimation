@@ -33,13 +33,14 @@ open class AnimPlayer(
     /**
      * pathObject转化
      */
-    protected val pathObjectDeal by lazy {
+    private val _pathObjectDealLazy = lazy {
         if (AnimationEx.mode == 1) PathObjectDeal {
             onResume()
         } else PathObjectDeal2 {
             onResume()
         }
     }
+    protected val pathObjectDeal by _pathObjectDealLazy
 
     override fun resume() {
         if (pathObjectDeal.hasTask()) {
@@ -81,6 +82,15 @@ open class AnimPlayer(
 
     override fun endAnimation() {
         pause()
+    }
+
+    override fun release() {
+        pause()
+        callback = null
+        mTouchPointF = null
+        if (_pathObjectDealLazy.isInitialized()) {
+            pathObjectDeal.release()
+        }
     }
 
     override fun addAnimDisplay(animPathObject: AnimPathObject) {

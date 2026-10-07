@@ -95,8 +95,21 @@ signing {
     sign publishing.publications
 }
 
+task cleanLocalReleaseDest(type: Delete) {
+    delete localReleaseDest
+}
+
+afterEvaluate {
+    tasks.findByName('signReleasePublication')?.dependsOn('bundleReleaseAar')
+    tasks.findByName('publishReleasePublicationToLocalBuildRepository')?.dependsOn('cleanLocalReleaseDest')
+    tasks.findByName('publishReleasePublicationToLocalBuildRepository')?.dependsOn('bundleReleaseAar')
+    tasks.findByName('publishReleasePublicationToLocalBuildRepository')?.dependsOn('signReleasePublication')
+    tasks.findByName('publishReleasePublicationToCentralPortalRepository')?.dependsOn('bundleReleaseAar')
+    tasks.findByName('publishReleasePublicationToCentralPortalRepository')?.dependsOn('signReleasePublication')
+}
+
 task zipMavenArtifacts(type: Zip) {
-    dependsOn publishReleasePublicationToLocalBuildRepository
+    dependsOn 'publishReleasePublicationToLocalBuildRepository'
     
     // The path where artifacts are published locally
     def groupPath = PUBLISH_GROUP_ID.replace('.', '/')

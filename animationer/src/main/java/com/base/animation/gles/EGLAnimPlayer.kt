@@ -173,10 +173,11 @@ class EGLAnimPlayer(private val render: EGLRender = EGLRender()) : AnimPlayer(fa
         }
     }
 
-    private fun release() {
+    override fun release() {
         setCanvasFrameCallback(null)
         endAnimation()
         render.release()
+        super.release()
     }
 
     @Synchronized

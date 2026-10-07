@@ -38,6 +38,7 @@ open class AnimView @JvmOverloads constructor(
         super.onDetachedFromWindow()
         player.setCanvasFrameCallback(null)
         endAnimation()
+        release()
     }
 
     override fun addAnimDisplay(animPathObject: AnimPathObject) {
