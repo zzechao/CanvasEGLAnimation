@@ -105,6 +105,18 @@ open class AnimPlayer(
         pathObjectDeal.setAnimVisible(animId, isVisible)
     }
 
+    override fun removeAnimCache(animId: Long, removeDisplayItem: Boolean, clearLayoutPointCache: Boolean) {
+        if (_pathObjectDealLazy.isInitialized()) {
+            pathObjectDeal.removeAnimCache(animId, removeDisplayItem, clearLayoutPointCache)
+        }
+    }
+
+    override fun removeAnimCache(animIds: Collection<Long>, removeDisplayItem: Boolean, clearLayoutPointCache: Boolean) {
+        if (_pathObjectDealLazy.isInitialized()) {
+            pathObjectDeal.removeAnimCache(animIds, removeDisplayItem, clearLayoutPointCache)
+        }
+    }
+
 
     override fun addAnimListener(iAnimListener: IAnimListener) {
         pathObjectDeal.animListeners.add(iAnimListener)

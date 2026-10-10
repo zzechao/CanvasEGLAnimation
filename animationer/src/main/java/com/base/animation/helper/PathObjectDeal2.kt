@@ -44,6 +44,11 @@ class PathObjectDeal2(private val parserEnd: () -> Unit) : IPathObjectDeal {
      */
     override val animListeners: MutableSet<IAnimListener> = CopyOnWriteArraySet()
 
+    /**
+     * animId 关联的 displayItemId 映射（用于按 animId 关联显示项）
+     */
+    private val animIdDisplayItemKeys = ConcurrentHashMap<Long, MutableSet<String>>()
+
     init {
         getOrInitPather()
     }
@@ -68,8 +73,11 @@ class PathObjectDeal2(private val parserEnd: () -> Unit) : IPathObjectDeal {
                 for (animPath in this@actor) {
                     if (!isActive) break
                     launch(coroutineContext) {
+                    val currentAnimId = animPath.animId
                     if (animPath.displayItemsMap.isNotEmpty()) {
                         AnimCache.displayItemCache.putDisplayItems(animPath.displayItemsMap)
+                        animIdDisplayItemKeys.getOrPut(currentAnimId) { CopyOnWriteArraySet() }
+                            .addAll(animPath.displayItemsMap.keys)
                     }
                     val clickable = animPath.clickable
                     val expand = animPath.expand
@@ -81,6 +89,7 @@ class PathObjectDeal2(private val parserEnd: () -> Unit) : IPathObjectDeal {
                                 it.mapIndexed { index, pathObjectWithDer ->
                                     val duringTime = pathObjectWithDer.during
                                     val start = starts[index]
+                                    animIdDisplayItemKeys.getOrPut(currentAnimId) { CopyOnWriteArraySet() }.add(start.displayItemId)
                                     val startAnimObject = start.toAnimDrawObject2()
                                     val end = pathObjectWithDer.pathObject
                                     val endAnimObject = end.toAnimDrawObject2()
@@ -153,6 +162,23 @@ class PathObjectDeal2(private val parserEnd: () -> Unit) : IPathObjectDeal {
         animDrawObjects[animId]?.isVisible = isVisible
     }
 
+    override fun removeAnimCache(animId: Long, removeDisplayItem: Boolean, clearLayoutPointCache: Boolean) {
+        val displayKeys = animIdDisplayItemKeys.remove(animId)
+        if (removeDisplayItem && displayKeys != null) {
+            displayKeys.forEach { displayId ->
+                val isReferencedByOther = animIdDisplayItemKeys.values.any { it.contains(displayId) }
+                if (!isReferencedByOther) {
+                    AnimCache.displayItemCache.removeDisplayItem(displayId)
+                }
+            }
+        }
+        if (clearLayoutPointCache) {
+            AnimCache.clearPointLayoutCache()
+        }
+        animDrawObjects.remove(animId)
+        animDrawIds.remove(animId)
+    }
+
     override fun release() {
         try {
             animPather?.close()
@@ -166,5 +192,6 @@ class PathObjectDeal2(private val parserEnd: () -> Unit) : IPathObjectDeal {
         animDrawObjects.clear()
         animListeners.clear()
         onItemListener = null
+        animIdDisplayItemKeys.clear()
     }
 }

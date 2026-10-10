@@ -35,6 +35,13 @@ class DisplayItemCache {
     }
 
     /**
+     * 移除指定的 displayItem
+     */
+    fun removeDisplayItem(displayItemId: String): BaseDisplayItem? {
+        return caches.remove(displayItemId)
+    }
+
+    /**
      * 是否含有对应的key和clazz
      */
     fun hasDisplayItem(key: String): Boolean {

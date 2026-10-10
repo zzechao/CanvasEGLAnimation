@@ -23,4 +23,15 @@ object AnimCache {
         displayItemCache.clear()
         pointLayoutIDCache.clear()
     }
+
+    /**
+     * 清理 View 布局坐标缓存（可指定具体 layoutId，若为 null 则清空全部）
+     */
+    fun clearPointLayoutCache(idLayout: Int? = null) {
+        if (idLayout == null) {
+            pointLayoutIDCache.clear()
+        } else {
+            pointLayoutIDCache.remove(idLayout)
+        }
+    }
 }

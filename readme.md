@@ -143,6 +143,28 @@ model build.gradle添加
     }
 ```
 
+### 动态移除动画缓存（解决多麦位送礼、麦位移动导致的复用问题）
+当直播间多麦位送礼且用户发生麦位移动/切麦时，可通过播放返回的 `animId` 动态清除对应的路径轨迹缓存，防止复用旧坐标：
+
+```kotlin
+    // 1. 播放动画，获取本次动画的 animIds 列表
+    val animIds = AnimDecoder2.suspendPlayAnimWithXml(anim_surface, xml) { node, displayItem ->
+        // 加载 Bitmap 等
+    }
+
+    // 2. 当麦位移动/需要重置该动画轨迹时，动态清理该动画的轨迹缓存：
+    // 方式一：直接通过 AnimSurfaceView / IAnimView 控件调用
+    anim_surface.removeAnimCache(animIds)
+
+    // 方式二：通过 AnimDecoder2 工具方法调用
+    AnimDecoder2.removeAnimCache(anim_surface, animIds)
+
+    // 进阶参数说明：
+    // removeDisplayItem: 是否同步移除图片等 DisplayItem 缓存（默认 false，避免误伤其他正在飞行的同款礼物）
+    // clearLayoutPointCache: 是否同步清除原生 View 屏幕坐标缓存（默认 false，麦位 View 挪位时可设为 true）
+    anim_surface.removeAnimCache(animIds, removeDisplayItem = false, clearLayoutPointCache = true)
+```
+
 ### 动画的效果演示，压缩成gif可能导致画质损伤，可参考项目里的mp4更为清晰顺畅
 ![image](https://github.com/zzechao/CanvasAnimation/blob/canvas_view_new_feature_2.0/v1.gif)
 

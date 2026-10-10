@@ -61,6 +61,16 @@ class PathObjectDeal(private val parserEnd: () -> Unit) : IPathObjectDeal {
     private val pathCacheMap: LruCache<String, MutableMap<Int, MutableList<AnimDrawObject>>> =
         LruCache(50)
 
+    /**
+     * animId 关联的 pathKey 映射（用于按 animId 动态精准作废轨迹缓存）
+     */
+    private val animIdPathKeys = ConcurrentHashMap<Long, MutableSet<String>>()
+
+    /**
+     * animId 关联的 displayItemId 映射（用于按 animId 关联显示项）
+     */
+    private val animIdDisplayItemKeys = ConcurrentHashMap<Long, MutableSet<String>>()
+
     init {
         getOrInitPather()
     }
@@ -83,8 +93,11 @@ class PathObjectDeal(private val parserEnd: () -> Unit) : IPathObjectDeal {
             supervisorScope {
                 for (animPath in this@actor) {
                     if (!isActive) break
+                    val currentAnimId = animPath.animId
                     if (animPath.displayItemsMap.isNotEmpty()) {
                         AnimCache.displayItemCache.putDisplayItems(animPath.displayItemsMap)
+                        animIdDisplayItemKeys.getOrPut(currentAnimId) { CopyOnWriteArraySet() }
+                            .addAll(animPath.displayItemsMap.keys)
                     }
                 var drawsMap = mutableMapOf<Int, MutableList<AnimDrawObject>>()
                 var position = 0
@@ -104,6 +117,10 @@ class PathObjectDeal(private val parserEnd: () -> Unit) : IPathObjectDeal {
                                 val displayItem = animPath.displayItemsMap[start.displayItemId] ?: getDisplayItem(start.displayItemId)
                                 var pathKey = "${fpsTime}_${start.key()}_${end.key()}_${duringTime}_${displayItem?.let { "${it::class.simpleName}_${it.isCalculate}" }}"
                                 pathKey = md.digest(pathKey.toByteArray(Charsets.UTF_8)).toHexString()
+
+                                animIdPathKeys.getOrPut(currentAnimId) { CopyOnWriteArraySet() }.add(pathKey)
+                                animIdDisplayItemKeys.getOrPut(currentAnimId) { CopyOnWriteArraySet() }.add(start.displayItemId)
+
                                 drawsMap = pathCacheMap.get(pathKey) ?: run {
                                     val pathProcessItem = PathProcessItem(
                                         end.itemX, end.itemY, end.itemAlpha, end.itemScaleX, end.itemScaleY, end.itemRotation
@@ -216,6 +233,34 @@ class PathObjectDeal(private val parserEnd: () -> Unit) : IPathObjectDeal {
         animDrawObjects[animId]?.isVisible = isVisible
     }
 
+    override fun removeAnimCache(animId: Long, removeDisplayItem: Boolean, clearLayoutPointCache: Boolean) {
+        // 1. 移除并作废路径轨迹缓存
+        val pathKeys = animIdPathKeys.remove(animId)
+        pathKeys?.forEach { key ->
+            pathCacheMap.remove(key)
+        }
+
+        // 2. 如果指定要移除对应的 DisplayItem（图片/文本等），在无其他活跃动画引用时安全移除
+        val displayKeys = animIdDisplayItemKeys.remove(animId)
+        if (removeDisplayItem && displayKeys != null) {
+            displayKeys.forEach { displayId ->
+                val isReferencedByOther = animIdDisplayItemKeys.values.any { it.contains(displayId) }
+                if (!isReferencedByOther) {
+                    AnimCache.displayItemCache.removeDisplayItem(displayId)
+                }
+            }
+        }
+
+        // 3. 及时清理 View 布局坐标缓存
+        if (clearLayoutPointCache) {
+            AnimCache.clearPointLayoutCache()
+        }
+
+        // 4. 清理内存中关联对象
+        animDrawObjects.remove(animId)
+        animDrawIds.remove(animId)
+    }
+
     override fun release() {
         try {
             animPather?.close()
@@ -230,6 +275,8 @@ class PathObjectDeal(private val parserEnd: () -> Unit) : IPathObjectDeal {
         animListeners.clear()
         onItemListener = null
         pathCacheMap.evictAll()
+        animIdPathKeys.clear()
+        animIdDisplayItemKeys.clear()
     }
 
     private fun ByteArray.toHexString(): String {

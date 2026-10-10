@@ -270,4 +270,36 @@ object AnimDecoder2 {
         }
         return emptyList()
     }
+
+    /**
+     * 动态移除指定 animId 的路径与渲染缓存
+     * @param anim 播放动画的 IAnimView (如 AnimSurfaceView、AnimTextureView、AnimView)
+     * @param animId 单个动画 ID
+     * @param removeDisplayItem 是否同步移除 DisplayItem（默认 false，避免误伤其他正在播放的共享资源）
+     * @param clearLayoutPointCache 是否同步清除 View 布局坐标缓存（默认 false，麦位移动时可传入 true）
+     */
+    fun removeAnimCache(
+        anim: IAnimView,
+        animId: Long,
+        removeDisplayItem: Boolean = false,
+        clearLayoutPointCache: Boolean = false
+    ) {
+        anim.removeAnimCache(animId, removeDisplayItem, clearLayoutPointCache)
+    }
+
+    /**
+     * 批量动态移除 animId 列表的路径与渲染缓存
+     * @param anim 播放动画的 IAnimView
+     * @param animIds 动画 ID 集合（如 suspendPlayAnimWithXml 返回的 List<Long>）
+     * @param removeDisplayItem 是否同步移除 DisplayItem（默认 false）
+     * @param clearLayoutPointCache 是否同步清除 View 布局坐标缓存（默认 false）
+     */
+    fun removeAnimCache(
+        anim: IAnimView,
+        animIds: Collection<Long>,
+        removeDisplayItem: Boolean = false,
+        clearLayoutPointCache: Boolean = false
+    ) {
+        anim.removeAnimCache(animIds, removeDisplayItem, clearLayoutPointCache)
+    }
 }
