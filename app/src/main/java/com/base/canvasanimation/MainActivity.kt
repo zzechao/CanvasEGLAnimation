@@ -3,9 +3,7 @@ package com.base.canvasanimation
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import com.base.animation.AnimationEx
-import kotlinx.android.synthetic.main.activity_main.bt1
-import kotlinx.android.synthetic.main.activity_main.bt2
-import kotlinx.android.synthetic.main.activity_main.bt3
+
 
 class MainActivity : AppCompatActivity() {
 
@@ -15,19 +13,19 @@ class MainActivity : AppCompatActivity() {
         AnimationEx.registerNode(ImageDouNode::class.java)
 
         setContentView(R.layout.activity_main)
-        bt1.setOnClickListener {
+        findViewById<android.view.View>(R.id.bt1).setOnClickListener {
             val transactionTooLargeException = supportFragmentManager.beginTransaction()
             transactionTooLargeException.replace(R.id.fl, TestAnimCanvasFragment())
             transactionTooLargeException.addToBackStack("TestAnimCanvasFragment")
             transactionTooLargeException.commitAllowingStateLoss()
         }
-        bt2.setOnClickListener {
+        findViewById<android.view.View>(R.id.bt2).setOnClickListener {
             val transactionTooLargeException = supportFragmentManager.beginTransaction()
             transactionTooLargeException.replace(R.id.fl, TestAnimCanvasFragment2())
             transactionTooLargeException.addToBackStack("TestAnimCanvasFragment2")
             transactionTooLargeException.commitAllowingStateLoss()
         }
-        bt3.setOnClickListener {
+        findViewById<android.view.View>(R.id.bt3).setOnClickListener {
             val transactionTooLargeException = supportFragmentManager.beginTransaction()
             transactionTooLargeException.replace(R.id.fl, TestAnimCanvasFragment3())
             transactionTooLargeException.addToBackStack("TestAnimCanvasFragment3")

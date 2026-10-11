@@ -39,14 +39,7 @@ import com.base.canvasanimation.TestAnimCanvasFragment.LocationX
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.transition.Transition
-import kotlinx.android.synthetic.main.fragment_anim_canvas.anim_1
-import kotlinx.android.synthetic.main.fragment_anim_canvas.anim_2
-import kotlinx.android.synthetic.main.fragment_anim_canvas.anim_3
-import kotlinx.android.synthetic.main.fragment_anim_canvas.anim_surface
-import kotlinx.android.synthetic.main.fragment_anim_canvas.mCode
-import kotlinx.android.synthetic.main.fragment_anim_canvas.mNinePTxt
-import kotlinx.android.synthetic.main.fragment_anim_canvas.mTextXml
-import kotlinx.android.synthetic.main.fragment_anim_canvas.relative
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.ObsoleteCoroutinesApi
@@ -103,6 +96,15 @@ class TestAnimCanvasFragment : Fragment(), OnAnimItemClick {
             "                }\n" +
             "            }"
 
+    private var anim_1: View? = null
+    private var anim_2: View? = null
+    private var anim_3: View? = null
+    private var anim_surface: com.base.animation.AnimSurfaceView? = null
+    private lateinit var mCode: android.widget.TextView
+    private lateinit var mNinePTxt: android.widget.TextView
+    private lateinit var mTextXml: android.widget.TextView
+    private lateinit var relative: android.view.ViewGroup
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View? {
@@ -111,6 +113,14 @@ class TestAnimCanvasFragment : Fragment(), OnAnimItemClick {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        anim_1 = view.findViewById(R.id.anim_1)
+        anim_2 = view.findViewById(R.id.anim_2)
+        anim_3 = view.findViewById(R.id.anim_3)
+        anim_surface = view.findViewById(R.id.anim_surface)
+        mCode = view.findViewById(R.id.mCode)
+        mNinePTxt = view.findViewById(R.id.mNinePTxt)
+        mTextXml = view.findViewById(R.id.mTextXml)
+        relative = view.findViewById(R.id.relative)
         lifecycleScope.launch {
             mNinePTxt.background = loadNinePatchDrawable(
                 this@TestAnimCanvasFragment.context,
@@ -188,21 +198,21 @@ class TestAnimCanvasFragment : Fragment(), OnAnimItemClick {
             })
         translationAnimatorSet.interpolator = AccelerateDecelerateInterpolator()
         translationAnimatorSet.addListener(object : Animator.AnimatorListener {
-            override fun onAnimationStart(animation: Animator?) {
+            override fun onAnimationStart(animation: Animator) {
                 view.visibility = View.VISIBLE
             }
 
-            override fun onAnimationEnd(animation: Animator?) {
+            override fun onAnimationEnd(animation: Animator) {
                 view.visibility = View.GONE
                 relative.removeView(view)
             }
 
-            override fun onAnimationCancel(animation: Animator?) {
+            override fun onAnimationCancel(animation: Animator) {
                 view.visibility = View.GONE
                 relative.removeView(view)
             }
 
-            override fun onAnimationRepeat(animation: Animator?) {
+            override fun onAnimationRepeat(animation: Animator) {
             }
         })
         translationAnimatorSet.start()
@@ -241,8 +251,8 @@ class TestAnimCanvasFragment : Fragment(), OnAnimItemClick {
         }.apply {
             Log.i("zzc", this.buildString())
             lifecycleScope.launch(Dispatchers.IO) {
-                anim_surface ?: return@launch
-                AnimDecoder2.suspendPlayAnimWithAnimNode(anim_surface, this@apply) { node, displayItem ->
+                val surface = anim_surface ?: return@launch
+                AnimDecoder2.suspendPlayAnimWithAnimNode(surface, this@apply) { node, displayItem ->
                     when (displayItem) {
                         is BitmapDisplayItem -> {
                             displayItem.mBitmap = BitmapLoader.decodeBitmapFrom(resources, R.mipmap.xin, 1, 100, 100)
@@ -356,9 +366,9 @@ class TestAnimCanvasFragment : Fragment(), OnAnimItemClick {
             }
         }.apply {
             lifecycleScope.launch(Dispatchers.IO) {
-                anim_surface ?: return@launch
+                val surface = anim_surface ?: return@launch
                 AnimDecoder2.suspendPlayAnimWithAnimNode(
-                    anim_surface,
+                    surface,
                     this@apply,
                 ) { node, displayItem ->
                     when (displayItem) {
@@ -376,7 +386,8 @@ class TestAnimCanvasFragment : Fragment(), OnAnimItemClick {
 
     private fun startSingleAnim3() {
         lifecycleScope.launch(Dispatchers.IO) {
-            AnimDecoder2.suspendPlayAnimWithXml(anim_surface, xml) { node, displayItem ->
+            val surface = anim_surface ?: return@launch
+            AnimDecoder2.suspendPlayAnimWithXml(surface, xml) { node, displayItem ->
                 when (displayItem) {
                     is BitmapDisplayItem -> {
                         displayItem.mBitmap =
@@ -468,9 +479,9 @@ class TestAnimCanvasFragment : Fragment(), OnAnimItemClick {
         }.apply {
             Animer.log.i("tttt2", this.buildString())
             lifecycleScope.launch {
-                anim_surface ?: return@launch
+                val surface = anim_surface ?: return@launch
                 AnimDecoder2.suspendPlayAnimWithAnimNode(
-                    anim_surface, this@apply
+                    surface, this@apply
                 ) { node, displayItem ->
                     when (displayItem) {
                         is BitmapDisplayItem -> {
@@ -524,9 +535,9 @@ class TestAnimCanvasFragment : Fragment(), OnAnimItemClick {
             }
         }.buildString().apply {
             lifecycleScope.launch {
-                anim_surface ?: return@launch
+                val surface = anim_surface ?: return@launch
                 AnimDecoder2.suspendPlayAnimWithXml(
-                    anim_surface, this@apply
+                    surface, this@apply
                 ) { node, displayItem ->
                     when (displayItem) {
                         is ImageDouNode.BitmapDouDisplay -> {
@@ -601,9 +612,9 @@ class TestAnimCanvasFragment : Fragment(), OnAnimItemClick {
             }
         }.apply {
             lifecycleScope.launch {
-                anim_surface ?: return@launch
+                val surface = anim_surface ?: return@launch
                 AnimDecoder2.suspendPlayAnimWithAnimNode(
-                    anim_surface, this@apply
+                    surface, this@apply
                 ) { node, displayItem ->
                     when (displayItem) {
                         is LayoutDisplayItem -> {
@@ -654,8 +665,8 @@ class TestAnimCanvasFragment : Fragment(), OnAnimItemClick {
 
             lifecycleScope.launch {
                 delay(locationX.delayTime)
-                anim_surface ?: return@launch
-                AnimDecoder2.suspendPlayAnimWithAnimNode(anim_surface, node) { node, displayItem ->
+                val surface = anim_surface ?: return@launch
+                AnimDecoder2.suspendPlayAnimWithAnimNode(surface, node) { node, displayItem ->
                     when (displayItem) {
                         is BitmapDisplayItem -> {
                             displayItem.mBitmap = red
@@ -737,8 +748,8 @@ class TestAnimCanvasFragment : Fragment(), OnAnimItemClick {
             }
         }
         lifecycleScope.launch {
-            anim_surface ?: return@launch
-            AnimDecoder2.suspendPlayAnimWithAnimNode(anim_surface, node) { node, displayItem ->
+            val surface = anim_surface ?: return@launch
+            AnimDecoder2.suspendPlayAnimWithAnimNode(surface, node) { node, displayItem ->
                 when (displayItem) {
                     is BitmapDisplayItem -> {
                         displayItem.mBitmap = suspendCancellableCoroutine {
@@ -830,9 +841,9 @@ class TestAnimCanvasFragment : Fragment(), OnAnimItemClick {
             }
         }.apply {
             lifecycleScope.launch {
-                anim_surface ?: return@launch
+                val surface = anim_surface ?: return@launch
                 AnimDecoder2.suspendPlayAnimWithAnimNode(
-                    anim_surface, this@apply
+                    surface, this@apply
                 ) { node, displayItem ->
                     when (displayItem) {
                         is BitmapDisplayItem -> {

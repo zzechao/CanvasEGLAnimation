@@ -134,7 +134,7 @@ class PathObjectDeal2(private val parserEnd: () -> Unit) : IPathObjectDeal {
      * 加入路径，并刷新画布缓存策略的时间
      */
     override fun sendAnimPath(animPathObject: AnimPathObject) {
-        getOrInitPather().offer(animPathObject)
+        getOrInitPather().trySend(animPathObject)
     }
 
     /**
