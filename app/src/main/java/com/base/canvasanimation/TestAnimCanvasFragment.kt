@@ -99,7 +99,7 @@ class TestAnimCanvasFragment : Fragment(), OnAnimItemClick {
     private var anim_1: View? = null
     private var anim_2: View? = null
     private var anim_3: View? = null
-    private var anim_surface: com.base.animation.AnimSurfaceView? = null
+    private var anim_surface: com.base.animation.AnimView? = null
     private lateinit var mCode: android.widget.TextView
     private lateinit var mNinePTxt: android.widget.TextView
     private lateinit var mTextXml: android.widget.TextView
